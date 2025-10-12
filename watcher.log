@@ -1,0 +1,10 @@
+[2025-10-12 17:15:51] Watching: C:\Users\willi\image_gen\input
+[2025-10-12 17:16:25] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-12 17:16:26] Running: C:\Python313\python.exe C:\Users\willi\image_gen\generate_image.py @C:\Users\willi\image_gen\styles\background\80s.txt --n 1 --model imagen-3.0-generate-002 --output C:\Users\willi\image_gen\output
+[2025-10-12 17:16:36] SUCCESS: generation completed
+stdout:
+Generating 1 image(s) with model imagen-3.0-generate-002...
+Saved images:
+ - C:\Users\willi\image_gen\output\20251012_171636_01.png
+
+[2025-10-12 17:16:36] Archived: C:\Users\willi\image_gen\archive\pexels-rdne-7867278.jpg

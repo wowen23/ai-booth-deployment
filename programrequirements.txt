@@ -1,0 +1,14 @@
+### Program Requirements
+### What we need for our AI company
+1. An exe that opens up a window
+2. options for photo styles - such as 80s, jurassic park, etc. take the options for these photos from a folder of prompts that we can swap in and out
+3. option for a free text prompt typed in the by the user
+
+Operations
+4. Photo to photo 
+5. Take a photo from a folder, send it to google, save the result in an output folder
+6. Trigger manually or automatically (when a new images is put in input) (avoid duplicates)
+7. Add a selector for which model (google imagen 4 or gemini flash 2.5)
+
+bonus
+7. figure out some way to send images to users via text. Lets do this later.
