@@ -10,5 +10,7 @@
     "gemini-2.5-flash-image"
   ],
   "num_images": 1,
-  "debounce_ms": 1000
+  "debounce_ms": 1000,
+  "mode": "background",
+  "editor_model": "gemini-2.5-flash-image"
 }

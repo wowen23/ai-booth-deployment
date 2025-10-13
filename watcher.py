@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Tuple
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 
+from genai_client import edit_with_gemini_image
 
 CONFIG_FILE = "config.json"
 PROCESSED_LEDGER = "processed.json"
@@ -28,6 +29,8 @@ class AppConfig:
     model_priority: List[str]
     num_images: int
     debounce_ms: int
+    mode: str  # "background" | "retheme" | "generate"
+    editor_model: str  # gemini-2.5-flash-image
 
 
 def load_config(base: Path) -> AppConfig:
@@ -42,6 +45,8 @@ def load_config(base: Path) -> AppConfig:
         model_priority=list(data.get("model_priority", ["imagen-3.0-generate-002"])),
         num_images=int(data.get("num_images", 1)),
         debounce_ms=int(data.get("debounce_ms", 1000)),
+        mode=str(data.get("mode", "background")),
+        editor_model=str(data.get("editor_model", "gemini-2.5-flash-image")),
     )
 
 
@@ -93,6 +98,24 @@ def is_stable(path: Path, debounce_ms: int) -> bool:
 def choose_model(model_priority: List[str]) -> str:
     # For Phase 1, just take the first. Later, we can probe availability.
     return model_priority[0]
+
+def read_prompt_text(prompt_path: Path) -> str:
+    return prompt_path.read_text(encoding="utf-8").strip()
+
+def save_images(output_dir: Path, input_file: Path, images: List[bytes]) -> List[Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    saved: List[Path] = []
+    stem = input_file.stem
+    for i, img_bytes in enumerate(images, start=1):
+        out_path = output_dir / f"{stem}_{ts}_{i:02d}.png"
+        try:
+            with open(out_path, "wb") as f:
+                f.write(img_bytes)
+            saved.append(out_path)
+        except Exception as e:
+            log(f"ERROR saving image {i}: {e}")
+    return saved
 
 
 def run_generation(base: Path, cfg: AppConfig, input_file: Path) -> Tuple[bool, Optional[str]]:
@@ -162,10 +185,29 @@ class Handler(FileSystemEventHandler):
                 log(f"File not stable, skipping: {path}")
                 return
 
-            # Run generation
-            ok, _ = run_generation(self.base, self.cfg, path)
-            if ok:
-                # Move to archive
+            # Run processing (Phase 2A for background/retheme; else Phase 1 fallback)
+            try:
+                if self.cfg.mode in ("background", "retheme"):
+                    prompt_text = read_prompt_text(self.cfg.style_file)
+                    try:
+                        img_bytes = path.read_bytes()
+                    except Exception as e:
+                        log(f"ERROR reading input image: {e}")
+                        return
+                    images = edit_with_gemini_image(img_bytes, prompt_text, model=self.cfg.editor_model)
+                    if not images:
+                        log("ERROR: edit returned no images")
+                        return
+                    saved = save_images(self.cfg.output_dir, path, images)
+                    if not saved:
+                        log("ERROR: failed to save edited images")
+                        return
+                    log(f"SUCCESS: edited {path.name} -> {len(saved)} file(s)")
+                else:
+                    ok, _ = run_generation(self.base, self.cfg, path)
+                    if not ok:
+                        return
+
                 dest = self.cfg.archive_dir / path.name
                 try:
                     shutil.move(str(path), str(dest))
@@ -174,6 +216,8 @@ class Handler(FileSystemEventHandler):
                     log(f"Archived: {dest}")
                 except Exception as e:
                     log(f"ERROR archiving {path}: {e}")
+            except Exception as e:
+                log(f"ERROR processing {path.name}: {e}")
 
 
 def main():
