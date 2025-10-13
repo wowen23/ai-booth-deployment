@@ -17,6 +17,7 @@ from genai_client import edit_with_gemini_image
 CONFIG_FILE = "config.json"
 PROCESSED_LEDGER = "processed.json"
 LOG_FILE = "watcher.log"
+LOCK_FILE = "watcher.lock"
 
 
 @dataclass
@@ -209,13 +210,27 @@ class Handler(FileSystemEventHandler):
                         return
 
                 dest = self.cfg.archive_dir / path.name
-                try:
-                    shutil.move(str(path), str(dest))
-                    self.ledger[key] = time.time()
-                    save_ledger(self.base, self.ledger)
-                    log(f"Archived: {dest}")
-                except Exception as e:
-                    log(f"ERROR archiving {path}: {e}")
+                # Be resilient to transient file-missing races on Windows
+                for attempt in range(3):
+                    try:
+                        if not path.exists():
+                            # Already moved or removed by the system; record as archived
+                            self.ledger[key] = time.time()
+                            save_ledger(self.base, self.ledger)
+                            log(f"Archive skipped (source missing): {path}")
+                            break
+                        shutil.move(str(path), str(dest))
+                        self.ledger[key] = time.time()
+                        save_ledger(self.base, self.ledger)
+                        log(f"Archived: {dest}")
+                        break
+                    except FileNotFoundError:
+                        # Retry briefly in case of race
+                        time.sleep(0.2)
+                        continue
+                    except Exception as e:
+                        log(f"ERROR archiving {path} (attempt {attempt+1}/3): {e}")
+                        break
             except Exception as e:
                 log(f"ERROR processing {path.name}: {e}")
 
@@ -256,6 +271,28 @@ def main():
                         log(f"ERROR archiving {p}: {e}")
         return
 
+    # Single-instance lock
+    lock_path = base / LOCK_FILE
+    if lock_path.exists():
+        try:
+            pid = int(lock_path.read_text(encoding="utf-8").strip() or "0")
+        except Exception:
+            pid = 0
+        log(f"Another watcher instance seems to be running (lock: {lock_path}, pid={pid}). Exiting.")
+        return
+    try:
+        lock_path.write_text(str(os.getpid()), encoding="utf-8")
+    except Exception as e:
+        log(f"Failed to create lock file {lock_path}: {e}")
+        return
+
+    # Log active config for visibility
+    log(
+        "Active config -> "
+        f"mode={cfg.mode}, style_file={cfg.style_file}, editor_model={cfg.editor_model}, "
+        f"input={cfg.input_dir}, output={cfg.output_dir}, archive={cfg.archive_dir}"
+    )
+
     # Start watchdog observer
     event_handler = Handler(base, cfg, ledger)
     observer = Observer()
@@ -268,6 +305,12 @@ def main():
             time.sleep(1)
     except KeyboardInterrupt:
         observer.stop()
+    finally:
+        try:
+            if lock_path.exists():
+                lock_path.unlink()
+        except Exception:
+            pass
     observer.join()
 
 

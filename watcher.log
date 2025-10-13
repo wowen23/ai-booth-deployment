@@ -83,3 +83,50 @@ Saved images:
  - C:\Users\willi\image_gen\output\20251012_180129_01.png
 
 [2025-10-12 18:01:29] ERROR archiving C:\Users\willi\image_gen\input\pexels-rdne-6519367.jpg: [WinError 2] The system cannot find the file specified
+[2025-10-12 18:03:23] Watching: C:\Users\willi\image_gen\input
+[2025-10-12 18:03:34] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-6519367.jpg
+[2025-10-12 18:03:35] Running: C:\Python313\python.exe C:\Users\willi\image_gen\generate_image.py @C:\Users\willi\image_gen\styles\background\80s.txt --n 1 --model imagen-3.0-generate-002 --output C:\Users\willi\image_gen\output
+[2025-10-12 18:03:44] SUCCESS: generation completed
+stdout:
+Generating 1 image(s) with model imagen-3.0-generate-002...
+Saved images:
+ - C:\Users\willi\image_gen\output\20251012_180344_01.png
+
+[2025-10-12 18:03:44] Archived: C:\Users\willi\image_gen\archive\pexels-rdne-6519367.jpg
+[2025-10-12 18:03:44] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-12 18:03:45] SUCCESS: edited pexels-rdne-6519367.jpg -> 1 file(s)
+[2025-10-12 18:03:45] ERROR archiving C:\Users\willi\image_gen\input\pexels-rdne-6519367.jpg: [WinError 2] The system cannot find the file specified
+[2025-10-12 18:03:45] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-12 18:03:45] Running: C:\Python313\python.exe C:\Users\willi\image_gen\generate_image.py @C:\Users\willi\image_gen\styles\background\80s.txt --n 1 --model imagen-3.0-generate-002 --output C:\Users\willi\image_gen\output
+[2025-10-12 18:03:55] SUCCESS: generation completed
+stdout:
+Generating 1 image(s) with model imagen-3.0-generate-002...
+Saved images:
+ - C:\Users\willi\image_gen\output\20251012_180355_01.png
+
+[2025-10-12 18:03:55] Archived: C:\Users\willi\image_gen\archive\pexels-rdne-7867278.jpg
+[2025-10-12 18:03:55] Detected new file: C:\Users\willi\image_gen\input\pexels-anntarazevich-5629146.jpg
+[2025-10-12 18:03:56] Running: C:\Python313\python.exe C:\Users\willi\image_gen\generate_image.py @C:\Users\willi\image_gen\styles\background\80s.txt --n 1 --model imagen-3.0-generate-002 --output C:\Users\willi\image_gen\output
+[2025-10-12 18:03:56] SUCCESS: edited pexels-rdne-7867278.jpg -> 1 file(s)
+[2025-10-12 18:03:56] ERROR archiving C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg: [WinError 2] The system cannot find the file specified
+[2025-10-12 18:03:56] Duplicate ignored: pexels-anntarazevich-5629146.jpg
+[2025-10-12 18:04:05] SUCCESS: generation completed
+stdout:
+Generating 1 image(s) with model imagen-3.0-generate-002...
+Saved images:
+ - C:\Users\willi\image_gen\output\20251012_180405_01.png
+
+[2025-10-12 18:04:05] Archived: C:\Users\willi\image_gen\archive\pexels-anntarazevich-5629146.jpg
+[2025-10-12 18:06:33] Watching: C:\Users\willi\image_gen\input
+[2025-10-12 18:06:35] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-12 18:06:35] Detected new file: C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-12 18:06:36] Running: C:\Python313\python.exe C:\Users\willi\image_gen\generate_image.py @C:\Users\willi\image_gen\styles\background\80s.txt --n 1 --model imagen-3.0-generate-002 --output C:\Users\willi\image_gen\output
+[2025-10-12 18:06:46] SUCCESS: generation completed
+stdout:
+Generating 1 image(s) with model imagen-3.0-generate-002...
+Saved images:
+ - C:\Users\willi\image_gen\output\20251012_180646_01.png
+
+[2025-10-12 18:06:46] Archived: C:\Users\willi\image_gen\archive\pexels-rdne-7867278.jpg
+[2025-10-12 18:06:47] SUCCESS: edited pexels-rdne-7867278.jpg -> 1 file(s)
+[2025-10-12 18:06:47] Archive skipped (source missing): C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
