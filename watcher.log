@@ -130,3 +130,27 @@ Saved images:
 [2025-10-12 18:06:46] Archived: C:\Users\willi\image_gen\archive\pexels-rdne-7867278.jpg
 [2025-10-12 18:06:47] SUCCESS: edited pexels-rdne-7867278.jpg -> 1 file(s)
 [2025-10-12 18:06:47] Archive skipped (source missing): C:\Users\willi\image_gen\input\pexels-rdne-7867278.jpg
+[2025-10-15 16:53:11] Active config -> mode=background, style_file=C:\Users\willi\image_gen\styles\background\wedding_brand.txt, editor_model=gemini-2.5-flash-image, input=C:\Users\willi\image_gen\input, output=C:\Users\willi\image_gen\output, archive=C:\Users\willi\image_gen\archive
+[2025-10-15 16:53:11] Watching: C:\Users\willi\image_gen\input
+[2025-10-15 16:53:22] Detected new file: C:\Users\willi\image_gen\input\IMG_0327.JPG
+[2025-10-15 16:53:32] SUCCESS: edited IMG_0327.JPG -> 1 file(s)
+[2025-10-15 16:53:32] Archived: C:\Users\willi\image_gen\archive\IMG_0327.JPG
+[2025-10-15 16:57:04] Detected new file: C:\Users\willi\image_gen\input\IMG_0332.PNG
+[2025-10-15 16:57:17] SUCCESS: edited IMG_0332.PNG -> 1 file(s)
+[2025-10-15 16:57:17] Archived: C:\Users\willi\image_gen\archive\IMG_0332.PNG
+[2025-10-15 16:57:51] Detected new file: C:\Users\willi\image_gen\input\IMG_0332.PNG
+[2025-10-15 16:58:01] SUCCESS: edited IMG_0332.PNG -> 1 file(s)
+[2025-10-15 16:58:01] Archived: C:\Users\willi\image_gen\archive\IMG_0332.PNG
+[2025-10-15 17:03:53] Detected new file: C:\Users\willi\image_gen\input\IMG_0332.PNG
+[2025-10-15 17:04:04] SUCCESS: edited IMG_0332.PNG -> 1 file(s)
+[2025-10-15 17:04:04] Archived: C:\Users\willi\image_gen\archive\IMG_0332.PNG
+[2025-10-15 17:11:46] Active config -> mode=background, style_file=C:\Users\willi\image_gen\styles\retheme\corporate_branding.txt, editor_model=gemini-2.5-flash-image, input=C:\Users\willi\image_gen\input, output=C:\Users\willi\image_gen\output, archive=C:\Users\willi\image_gen\archive
+[2025-10-15 17:11:46] Watching: C:\Users\willi\image_gen\input
+[2025-10-15 17:11:55] Detected new file: C:\Users\willi\image_gen\input\IMG_0332.PNG
+[2025-10-15 17:11:56] Processing with mode=background, style_file=C:\Users\willi\image_gen\styles\retheme\corporate_branding.txt, editor_model=gemini-2.5-flash-image
+[2025-10-15 17:12:06] SUCCESS: edited IMG_0332.PNG -> 1 file(s)
+[2025-10-15 17:12:06] Archived: C:\Users\willi\image_gen\archive\IMG_0332.PNG
+[2025-10-15 17:13:17] Detected new file: C:\Users\willi\image_gen\input\IMG_0332.PNG
+[2025-10-15 17:13:18] Processing with mode=background, style_file=C:\Users\willi\image_gen\styles\retheme\corporate_branding.txt, editor_model=gemini-2.5-flash-image
+[2025-10-15 17:13:26] SUCCESS: edited IMG_0332.PNG -> 1 file(s)
+[2025-10-15 17:13:26] Archived: C:\Users\willi\image_gen\archive\IMG_0332.PNG

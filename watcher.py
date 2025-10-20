@@ -188,28 +188,39 @@ class Handler(FileSystemEventHandler):
 
             # Run processing (Phase 2A for background/retheme; else Phase 1 fallback)
             try:
-                if self.cfg.mode in ("background", "retheme"):
-                    prompt_text = read_prompt_text(self.cfg.style_file)
+                # Reload latest config on each file to pick up GUI changes
+                current_cfg = load_config(self.base)
+                # Infer mode from style_file path category
+                try:
+                    cat = current_cfg.style_file.parts[-3]
+                except Exception:
+                    cat = "background"
+                inferred_mode = "retheme" if cat == "retheme" else "background"
+
+                log(f"Processing with mode={inferred_mode}, style_file={current_cfg.style_file}, editor_model={current_cfg.editor_model}")
+
+                if inferred_mode in ("background", "retheme"):
+                    prompt_text = read_prompt_text(current_cfg.style_file)
                     try:
                         img_bytes = path.read_bytes()
                     except Exception as e:
                         log(f"ERROR reading input image: {e}")
                         return
-                    images = edit_with_gemini_image(img_bytes, prompt_text, model=self.cfg.editor_model)
+                    images = edit_with_gemini_image(img_bytes, prompt_text, model=current_cfg.editor_model)
                     if not images:
                         log("ERROR: edit returned no images")
                         return
-                    saved = save_images(self.cfg.output_dir, path, images)
+                    saved = save_images(current_cfg.output_dir, path, images)
                     if not saved:
                         log("ERROR: failed to save edited images")
                         return
                     log(f"SUCCESS: edited {path.name} -> {len(saved)} file(s)")
                 else:
-                    ok, _ = run_generation(self.base, self.cfg, path)
+                    ok, _ = run_generation(self.base, current_cfg, path)
                     if not ok:
                         return
 
-                dest = self.cfg.archive_dir / path.name
+                dest = current_cfg.archive_dir / path.name
                 # Be resilient to transient file-missing races on Windows
                 for attempt in range(3):
                     try:

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Booth Web</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    label { font-weight: 600; }
+    button { padding: 8px 12px; }
+    #preview { max-width: 100%; margin-top: 12px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    .card img { width: 100%; height: auto; border-radius: 6px; }
+    .muted { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>AI Booth</h1>
+
+  <div class="row">
+    <label for="category">Style Category</label>
+    <select id="category">
+      <option value="background">background</option>
+      <option value="retheme">retheme</option>
+    </select>
+
+    <label for="style">Style</label>
+    <select id="style"></select>
+  </div>
+
+  <div class="row">
+    <label for="file">Photo</label>
+    <input id="file" type="file" accept="image/*" capture="environment" />
+    <button id="submit">Edit</button>
+  </div>
+
+  <img id="preview" alt="preview" />
+
+  <div id="status" class="muted"></div>
+
+  <h2>Results</h2>
+  <div id="results" class="gallery"></div>
+
+  <script>
+    const categoryEl = document.getElementById('category');
+    const styleEl = document.getElementById('style');
+    const fileEl = document.getElementById('file');
+    const submitEl = document.getElementById('submit');
+    const previewEl = document.getElementById('preview');
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+
+    async function loadStyles() {
+      const cat = categoryEl.value;
+      statusEl.textContent = 'Loading styles...';
+      try {
+        const res = await fetch(`/styles?category=${encodeURIComponent(cat)}`);
+        const data = await res.json();
+        styleEl.innerHTML = '';
+        for (const s of data.styles) {
+          const opt = document.createElement('option');
+          opt.value = s.path; // relative path
+          opt.textContent = s.name;
+          styleEl.appendChild(opt);
+        }
+        statusEl.textContent = '';
+      } catch (e) {
+        statusEl.textContent = 'Failed to load styles';
+      }
+    }
+
+    categoryEl.addEventListener('change', loadStyles);
+
+    fileEl.addEventListener('change', () => {
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) { previewEl.src = ''; return; }
+      const url = URL.createObjectURL(file);
+      previewEl.src = url;
+    });
+
+    submitEl.addEventListener('click', async () => {
+      const file = fileEl.files && fileEl.files[0];
+      const stylePath = styleEl.value;
+      if (!file || !stylePath) {
+        statusEl.textContent = 'Select a style and an image first.';
+        return;
+      }
+      statusEl.textContent = 'Uploading and editing...';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('style_path', stylePath);
+      // editor_model can be customized later; default on server is gemini-2.5-flash-image
+
+      try {
+        const resp = await fetch('/edit', { method: 'POST', body: fd });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'Failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = 'Done!';
+        for (const url of data.files) {
+          const card = document.createElement('div');
+          card.className = 'card';
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = 'result';
+          const link = document.createElement('a');
+          link.href = url; link.textContent = 'Open'; link.target = '_blank';
+          card.appendChild(img);
+          card.appendChild(link);
+          resultsEl.prepend(card);
+        }
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+      }
+    });
+
+    // init
+    loadStyles();
+  </script>
+</body>
+</html>
