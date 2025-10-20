@@ -51,6 +51,25 @@
   <h2>Results</h2>
   <div id="results" class="gallery"></div>
 
+  <hr/>
+  <h2>Create a new prompt</h2>
+  <div class="row">
+    <label for="newCat">Category</label>
+    <select id="newCat">
+      <option value="background">background</option>
+      <option value="retheme">retheme</option>
+    </select>
+    <label for="newName">Name</label>
+    <input id="newName" placeholder="e.g. corporate_branding"/>
+  </div>
+  <div class="row" style="flex-direction:column; align-items:stretch; max-width:800px;">
+    <label for="newText">Prompt text</label>
+    <textarea id="newText" rows="6" style="width:100%;"></textarea>
+  </div>
+  <div class="row">
+    <button id="savePrompt">Save Prompt</button>
+  </div>
+
   <script>
     const categoryEl = document.getElementById('category');
     const styleEl = document.getElementById('style');
@@ -63,6 +82,10 @@
     const captureEl = document.getElementById('capture');
     const liveEl = document.getElementById('live');
     const canvasEl = document.getElementById('canvas');
+    const newCatEl = document.getElementById('newCat');
+    const newNameEl = document.getElementById('newName');
+    const newTextEl = document.getElementById('newText');
+    const savePromptEl = document.getElementById('savePrompt');
 
     async function loadStyles() {
       const cat = categoryEl.value;
@@ -184,6 +207,30 @@
 
     // init
     loadStyles();
+
+    // Save prompt
+    savePromptEl.addEventListener('click', async () => {
+      const name = (newNameEl.value || '').trim();
+      const category = newCatEl.value;
+      const text = (newTextEl.value || '').trim();
+      if (!name || !text) { statusEl.textContent = 'Enter a name and prompt text.'; return; }
+      statusEl.textContent = 'Saving prompt...';
+      try {
+        const resp = await fetch('/prompts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, category, text })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(err.detail || 'Failed');
+        }
+        await loadStyles();
+        statusEl.textContent = 'Saved. New style added.';
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+      }
+    });
   </script>
 </body>
 </html>

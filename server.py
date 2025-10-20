@@ -8,7 +8,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from genai_client import edit_with_gemini_image
@@ -126,6 +126,34 @@ async def edit_image(
         saved_urls.append(f"/outputs/{out_name}")
 
     return EditResponse(id=job_id, files=saved_urls)
+
+
+class PromptCreate(BaseModel):
+    name: str = Field(..., description="Short file name, e.g. 'jurassic-park'")
+    category: str = Field(..., description="'background' or 'retheme'")
+    text: str = Field(..., description="Prompt contents")
+
+
+def _sanitize_name(name: str) -> str:
+    safe = "".join(ch for ch in name if ch.isalnum() or ch in ("-", "_"))
+    return safe.strip() or "prompt"
+
+
+@app.post("/prompts")
+def create_prompt(p: PromptCreate):
+    category = p.category.strip().lower()
+    if category not in {"background", "retheme"}:
+        raise HTTPException(status_code=400, detail="category must be 'background' or 'retheme'")
+    fname = _sanitize_name(p.name) + ".txt"
+    target_dir = STYLES_DIR / category
+    ensure_dir(target_dir)
+    target = target_dir / fname
+    try:
+        target.write_text(p.text.strip() + "\n", encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write prompt: {e}")
+    rel = str(target.relative_to(BASE_DIR)).replace("\\", "/")
+    return {"ok": True, "path": rel}
 
 
 # Mount static for outputs and the static UI
