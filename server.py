@@ -22,10 +22,12 @@ load_dotenv()
 
 app = FastAPI(title="AI Booth Web")
 
-# Allow same-origin and localhost usage; adjust as needed in production
+# CORS: read allowed origins from env (comma-separated); default to localhost only
+allow_origins_env = os.getenv("APP_ALLOW_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+allow_origins = [o.strip() for o in allow_origins_env if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,7 +89,13 @@ async def edit_image(
     file: UploadFile = File(...),
     style_path: str = Form(...),
     editor_model: str = Form("gemini-2.5-flash-image"),
+    pin: str | None = Form(None),
 ):
+    # PIN gate (optional): if APP_PIN is set, require matching pin
+    app_pin = os.getenv("APP_PIN")
+    if app_pin:
+        if not pin or pin != app_pin:
+            raise HTTPException(status_code=401, detail="Invalid PIN")
     # Read style prompt
     style_abs = (BASE_DIR / style_path).resolve()
     if not style_abs.exists() or not style_abs.is_file():
@@ -132,6 +140,7 @@ class PromptCreate(BaseModel):
     name: str = Field(..., description="Short file name, e.g. 'jurassic-park'")
     category: str = Field(..., description="'background' or 'retheme'")
     text: str = Field(..., description="Prompt contents")
+    pin: str | None = Field(None, description="Optional PIN; required if APP_PIN is set")
 
 
 def _sanitize_name(name: str) -> str:
@@ -141,6 +150,11 @@ def _sanitize_name(name: str) -> str:
 
 @app.post("/prompts")
 def create_prompt(p: PromptCreate):
+    # PIN gate (optional)
+    app_pin = os.getenv("APP_PIN")
+    if app_pin:
+        if not p.pin or p.pin != app_pin:
+            raise HTTPException(status_code=401, detail="Invalid PIN")
     category = p.category.strip().lower()
     if category not in {"background", "retheme"}:
         raise HTTPException(status_code=400, detail="category must be 'background' or 'retheme'")

@@ -30,6 +30,29 @@
     <select id="style"></select>
   </div>
 
+  <div class="row" style="gap:8px; align-items:flex-start;">
+    <div>
+      <div class="muted">Popular (background)</div>
+      <div class="row" id="presets-bg" style="gap:8px;">
+        <button class="preset" data-category="background" data-style-path="styles/background/80s.txt">80s Neon</button>
+        <button class="preset" data-category="background" data-style-path="styles/background/wedding_brand.txt">Wedding Brand</button>
+        <button class="preset" data-category="background" data-style-path="styles/background/studio_pastel.txt">Studio Pastel</button>
+        <button class="preset" data-category="background" data-style-path="styles/background/midnight_city.txt">Midnight City</button>
+        <button class="preset" data-category="background" data-style-path="styles/background/retro_arcade.txt">Retro Arcade</button>
+      </div>
+    </div>
+    <div>
+      <div class="muted">Popular (retheme)</div>
+      <div class="row" id="presets-re" style="gap:8px;">
+        <button class="preset" data-category="retheme" data-style-path="styles/retheme/jurassic-park.txt">Jurassic Park</button>
+        <button class="preset" data-category="retheme" data-style-path="styles/retheme/corporate_branding.txt">Corporate Brand</button>
+        <button class="preset" data-category="retheme" data-style-path="styles/retheme/fantasy_royal.txt">Fantasy Royal</button>
+        <button class="preset" data-category="retheme" data-style-path="styles/retheme/vogue_editorial.txt">Vogue Editorial</button>
+        <button class="preset" data-category="retheme" data-style-path="styles/retheme/cyberpunk_street.txt">Cyberpunk</button>
+      </div>
+    </div>
+  </div>
+
   <div class="row">
     <label for="file">Photo</label>
     <input id="file" type="file" accept="image/*" capture="environment" />
@@ -86,6 +109,7 @@
     const newNameEl = document.getElementById('newName');
     const newTextEl = document.getElementById('newText');
     const savePromptEl = document.getElementById('savePrompt');
+    const presetButtons = Array.from(document.querySelectorAll('button.preset'));
 
     async function loadStyles() {
       const cat = categoryEl.value;
@@ -106,7 +130,29 @@
       }
     }
 
+    async function selectPreset(category, stylePath) {
+      // Switch category, reload styles, then select the style if present
+      categoryEl.value = category;
+      await loadStyles();
+      const idx = Array.from(styleEl.options).findIndex(o => o.value === stylePath);
+      if (idx >= 0) {
+        styleEl.selectedIndex = idx;
+        statusEl.textContent = `Preset selected: ${styleEl.options[idx].text}`;
+      } else {
+        statusEl.textContent = `Preset style not found in ${category}. You can create it below.`;
+      }
+    }
+
     categoryEl.addEventListener('change', loadStyles);
+
+    // Preset handlers
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const category = btn.getAttribute('data-category');
+        const path = btn.getAttribute('data-style-path');
+        await selectPreset(category, path);
+      });
+    });
 
     fileEl.addEventListener('change', () => {
       const file = fileEl.files && fileEl.files[0];
