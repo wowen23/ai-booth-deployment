@@ -4,7 +4,7 @@ from typing import List
 
 from dotenv import load_dotenv
 from PIL import Image
-from google import genai
+import google.genai as genai
 from google.genai import types
 
 
