@@ -93,6 +93,45 @@
     <button id="savePrompt">Save Prompt</button>
   </div>
 
+  <hr/>
+  <h2>Watcher (admin)</h2>
+  <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label for="pinInput">PIN</label>
+      <input id="pinInput" placeholder="optional if APP_PIN unset" style="width:160px;" />
+    </div>
+    <div>
+      <label for="watchDir">Watch dir</label>
+      <input id="watchDir" placeholder="C:\\Photos\\Tether" style="width:280px;" />
+    </div>
+    <div>
+      <label for="watchStyle">Style path</label>
+      <input id="watchStyle" placeholder="(leave blank to use config.json)" style="width:320px;" />
+    </div>
+  </div>
+  <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label for="watchModel">Editor model</label>
+      <input id="watchModel" placeholder="gemini-2.5-flash-image" style="width:220px;" />
+    </div>
+    <div>
+      <label for="watchDebounce">Debounce (ms)</label>
+      <input id="watchDebounce" type="number" value="1000" style="width:120px;" />
+    </div>
+    <div>
+      <label for="watchArchive">Archive dir</label>
+      <input id="watchArchive" placeholder="C:\\Photos\\Archive" style="width:280px;" />
+    </div>
+  </div>
+  <div class="row" style="gap:8px;">
+    <button id="btnStartWatch">Start Watcher</button>
+    <button id="btnStopWatch">Stop Watcher</button>
+    <button id="btnStatus">Refresh Status</button>
+    <button id="btnLogs">Refresh Logs</button>
+  </div>
+  <pre id="watchStatus" class="muted" style="white-space:pre-wrap; max-height:160px; overflow:auto; background:#fafafa; padding:8px; border:1px solid #eee; border-radius:6px;"></pre>
+  <pre id="watchLogs" class="muted" style="white-space:pre-wrap; max-height:200px; overflow:auto; background:#fafafa; padding:8px; border:1px solid #eee; border-radius:6px;"></pre>
+
   <script>
     const categoryEl = document.getElementById('category');
     const styleEl = document.getElementById('style');
@@ -110,6 +149,30 @@
     const newTextEl = document.getElementById('newText');
     const savePromptEl = document.getElementById('savePrompt');
     const presetButtons = Array.from(document.querySelectorAll('button.preset'));
+    // Watcher admin
+    const pinInput = document.getElementById('pinInput');
+    const watchDirEl = document.getElementById('watchDir');
+    const watchStyleEl = document.getElementById('watchStyle');
+    const watchModelEl = document.getElementById('watchModel');
+    const watchDebounceEl = document.getElementById('watchDebounce');
+    const watchArchiveEl = document.getElementById('watchArchive');
+    const btnStartWatch = document.getElementById('btnStartWatch');
+    const btnStopWatch = document.getElementById('btnStopWatch');
+    const btnStatus = document.getElementById('btnStatus');
+    const btnLogs = document.getElementById('btnLogs');
+    const watchStatus = document.getElementById('watchStatus');
+    const watchLogs = document.getElementById('watchLogs');
+
+    // Prefill watcher fields from config.json
+    try {
+      fetch('/config').then(r => r.json()).then(cfg => {
+        if (cfg && typeof cfg === 'object') {
+          if (!watchDirEl.value && cfg.input_dir) watchDirEl.value = cfg.input_dir;
+          if (!watchStyleEl.value && cfg.style_file) watchStyleEl.value = '';
+          if (!watchModelEl.value && cfg.editor_model) watchModelEl.value = cfg.editor_model;
+        }
+      }).catch(() => {});
+    } catch {}
 
     async function loadStyles() {
       const cat = categoryEl.value;
@@ -154,6 +217,74 @@
       });
     });
 
+    // Watcher helpers
+    async function refreshStatus() {
+      try {
+        const q = pinInput.value ? `?pin=${encodeURIComponent(pinInput.value)}` : '';
+        const res = await fetch(`/watcher/status${q}`);
+        if (!res.ok) throw new Error('status failed');
+        const data = await res.json();
+        watchStatus.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        watchStatus.textContent = 'Error loading status';
+      }
+    }
+    async function refreshLogs() {
+      try {
+        const q = pinInput.value ? `?limit=200&pin=${encodeURIComponent(pinInput.value)}` : '?limit=200';
+        const res = await fetch(`/watcher/logs${q}`);
+        if (!res.ok) throw new Error('logs failed');
+        const data = await res.json();
+        watchLogs.textContent = (data.lines || []).join('\n');
+      } catch (e) {
+        watchLogs.textContent = 'Error loading logs';
+      }
+    }
+
+    btnStatus.addEventListener('click', refreshStatus);
+    btnLogs.addEventListener('click', refreshLogs);
+    btnStartWatch.addEventListener('click', async () => {
+      const body = {
+        watch_dir: watchDirEl.value,
+        watch_style_path: (watchStyleEl.value || undefined),
+        editor_model: watchModelEl.value || undefined,
+        debounce_ms: parseInt(watchDebounceEl.value || '1000', 10),
+        archive_dir: watchArchiveEl.value || undefined,
+        pin: pinInput.value || undefined,
+      };
+      try {
+        const res = await fetch('/watcher/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'start failed');
+        }
+        await refreshStatus();
+        await refreshLogs();
+        statusEl.textContent = 'Watcher started';
+      } catch (e) {
+        statusEl.textContent = 'Start failed: ' + e.message;
+      }
+    });
+    btnStopWatch.addEventListener('click', async () => {
+      const body = { pin: pinInput.value || undefined };
+      try {
+        const res = await fetch('/watcher/stop', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'stop failed');
+        }
+        await refreshStatus();
+        await refreshLogs();
+        statusEl.textContent = 'Watcher stopped';
+      } catch (e) {
+        statusEl.textContent = 'Stop failed: ' + e.message;
+      }
+    });
+
     fileEl.addEventListener('change', () => {
       const file = fileEl.files && fileEl.files[0];
       if (!file) { previewEl.src = ''; return; }
@@ -187,6 +318,7 @@
       const fd = new FormData();
       fd.append('file', file);
       fd.append('style_path', stylePath);
+      if (pinInput.value) fd.append('pin', pinInput.value);
       // editor_model can be customized later; default on server is gemini-2.5-flash-image
 
       try {
@@ -235,6 +367,7 @@
         const fd = new FormData();
         fd.append('file', blob, 'capture.jpg');
         fd.append('style_path', stylePath);
+        if (pinInput.value) fd.append('pin', pinInput.value);
         statusEl.textContent = 'Uploading and editing...';
         try {
           const resp = await fetch('/edit', { method: 'POST', body: fd });
@@ -265,7 +398,7 @@
         const resp = await fetch('/prompts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, category, text })
+          body: JSON.stringify({ name, category, text, pin: pinInput.value || undefined })
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
