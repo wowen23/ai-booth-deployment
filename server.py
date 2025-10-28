@@ -478,3 +478,51 @@ def get_config():
         return load_config()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load config: {e}")
+
+
+# ------------------------------
+# SDK bridge helpers (optional integration)
+# ------------------------------
+def _bridge_url() -> str:
+    return os.getenv("SDK_BRIDGE_URL", "http://localhost:9001").rstrip("/")
+
+
+@app.get("/sdk/bridge")
+def sdk_bridge_info():
+    return {"bridge_url": _bridge_url()}
+
+
+class ShootReq(BaseModel):
+    pin: str | None = None
+    bridge_url: str | None = None
+
+
+@app.post("/sdk/shoot")
+def sdk_shoot(req: ShootReq):
+    app_pin = os.getenv("APP_PIN")
+    if app_pin and (not req.pin or req.pin != app_pin):
+        raise HTTPException(status_code=401, detail="Invalid PIN")
+    # Forward to bridge
+    import json as _json
+    from urllib import request as _req
+    from urllib.error import URLError, HTTPError
+    bridge = (req.bridge_url or _bridge_url()).rstrip("/")
+    url = f"{bridge}/shoot"
+    body = _json.dumps({}).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    try:
+        r = _req.Request(url, data=body, headers=headers, method="POST")
+        with _req.urlopen(r, timeout=30) as resp:
+            data = resp.read().decode("utf-8")
+            try:
+                return _json.loads(data)
+            except Exception:
+                return {"ok": True, "raw": data}
+    except HTTPError as e:
+        try:
+            err = e.read().decode("utf-8")
+        except Exception:
+            err = str(e)
+        raise HTTPException(status_code=e.code, detail=f"Bridge error: {err}")
+    except URLError as e:
+        raise HTTPException(status_code=502, detail=f"Bridge unreachable at {bridge}: {e}")

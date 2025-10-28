@@ -1,3 +1,10 @@
+    // Prefill bridge url
+    try {
+      fetch('/sdk/bridge').then(r => r.json()).then(d => {
+        if (!bridgeUrlEl.value && d && d.bridge_url) bridgeUrlEl.value = d.bridge_url;
+      }).catch(() => {});
+    } catch {}
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -94,6 +101,29 @@
   </div>
 
   <hr/>
+  <h2>SDK Live View (bridge)</h2>
+  <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label for="bridgeUrl">Bridge URL</label>
+      <input id="bridgeUrl" placeholder="http://localhost:9001" style="width:280px;" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <div>
+        <button id="btnOpenLive">Open Live View</button>
+        <button id="btnStopLive">Stop Live View</button>
+        <button id="btnShoot">Shoot</button>
+      </div>
+    </div>
+  </div>
+  <div class="row" style="width:100%;">
+    <img id="bridgeLive" alt="SDK Live View" style="max-width:100%;border:1px solid #ddd;border-radius:8px" />
+  </div>
+  <div class="muted" style="max-width:800px;">
+    Uses a local Windows bridge app (Nikon SDK). Live view shows via MJPEG. Shoot saves to your watch folder and is processed automatically.
+  </div>
+
+  <hr/>
   <h2>Watcher (admin)</h2>
   <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
     <div>
@@ -162,6 +192,12 @@
     const btnLogs = document.getElementById('btnLogs');
     const watchStatus = document.getElementById('watchStatus');
     const watchLogs = document.getElementById('watchLogs');
+    // SDK bridge UI
+    const bridgeUrlEl = document.getElementById('bridgeUrl');
+    const btnOpenLive = document.getElementById('btnOpenLive');
+    const btnStopLive = document.getElementById('btnStopLive');
+    const btnShoot = document.getElementById('btnShoot');
+    const bridgeLiveEl = document.getElementById('bridgeLive');
 
     // Prefill watcher fields from config.json
     try {
@@ -282,6 +318,67 @@
         statusEl.textContent = 'Watcher stopped';
       } catch (e) {
         statusEl.textContent = 'Stop failed: ' + e.message;
+      }
+    });
+
+    // Webcam helpers (1080p preferred)
+    let currentStream = null;
+    async function startCamera() {
+      // Stop any existing stream first
+      try {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+        }
+      } catch {}
+      statusEl.textContent = 'Requesting camera (1080p preferred)...';
+      const constraints = {
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      };
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        liveEl.srcObject = stream;
+        await liveEl.play();
+        statusEl.textContent = 'Camera started';
+      } catch (e) {
+        statusEl.textContent = 'Camera error: ' + (e && e.message ? e.message : 'failed to start');
+      }
+    }
+
+    startCamEl.addEventListener('click', startCamera);
+
+    // SDK bridge handlers
+    btnOpenLive.addEventListener('click', () => {
+      const url = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '') + '/live.mjpg?ts=' + Date.now();
+      bridgeLiveEl.src = url;
+      statusEl.textContent = 'Opening SDK live view...';
+    });
+    btnStopLive.addEventListener('click', () => {
+      bridgeLiveEl.src = '';
+      statusEl.textContent = 'SDK live view stopped';
+    });
+    btnShoot.addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/sdk/shoot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinInput.value || undefined, bridge_url: bridgeUrlEl.value || undefined })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'shoot failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = 'Shoot triggered';
+        // If bridge returns saved filenames, we could show them here later
+      } catch (e) {
+        statusEl.textContent = 'Shoot error: ' + e.message;
       }
     });
 
