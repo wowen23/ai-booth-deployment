@@ -1,0 +1,8 @@
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.csproj.AssemblyReference.cache
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\rpswa.dswa.cache.json
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.AssemblyInfoInputs.cache
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.AssemblyInfo.cs
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.csproj.CoreCompileInputs.cache
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\obj\Debug\net8.0\NikonBridge.sourcelink.json

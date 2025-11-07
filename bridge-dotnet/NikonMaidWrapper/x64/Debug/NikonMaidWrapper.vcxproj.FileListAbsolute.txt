@@ -1,0 +1,1 @@
+C:\Users\willi\image_gen\bridge-dotnet\NikonMaidWrapper\x64\Debug\NikonMaidWrapper.vcxproj.AssemblyReference.cache

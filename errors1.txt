@@ -1,0 +1,2 @@
+Metadata file 'C:\Users\willi\image_gen\bridge-dotnet\NikonBridge\bin\Debug\net8.0\NikonMaidWrapper.dll' could not be found
+'System::Convert::ToString': ambiguous call to overloaded function

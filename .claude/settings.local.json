@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(dir \"C:\\Users\\willi\\image_gen\\S-SDKZ6_2-006BF-ALLIN\\Module\\Win\\Bin\\x64\")",
+      "Bash(dir:*)",
+      "Bash(dotnet build:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/MSBuild.exe\" \"C:/Users/willi/image_gen/bridge-dotnet/NikonBridge/NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64 /v:minimal)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64 /v:minimal)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonBridge.sln /p:Configuration=Debug /p:Platform=x64)",
+      "Bash(cmd //c:*)",
+      "Bash(curl.exe:*)",
+      "WebSearch",
+      "Bash(claude --list-skills)",
+      "Skill(document-skills:pdf)",
+      "Bash(powershell:*)",
+      "Bash(pdftotext:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64 /v:minimal)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonMaidWrapper.vcxproj /p:Configuration=Debug /p:Platform=x64)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

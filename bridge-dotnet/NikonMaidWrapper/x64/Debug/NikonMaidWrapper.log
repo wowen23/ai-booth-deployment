@@ -1,0 +1,17 @@
+﻿  NikonMaidWrapper.cpp
+C:\Users\willi\image_gen\S-SDKZ6_2-006BF-ALLIN\Module\Win\Header Files\NkTypes.h(34,18): error C2371: 'UCHAR': redefinition; different basic types
+  (compiling source file 'NikonMaidWrapper.cpp')
+      C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\minwindef.h(55,23):
+      see declaration of 'UCHAR'
+  
+C:\Users\willi\image_gen\S-SDKZ6_2-006BF-ALLIN\Module\Win\Header Files\NkTypes.h(36,17): error C2371: 'CHAR': redefinition; different basic types
+  (compiling source file 'NikonMaidWrapper.cpp')
+      C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\winnt.h(494,14):
+      see declaration of 'CHAR'
+  
+C:\Users\willi\image_gen\bridge-dotnet\NikonMaidWrapper\NikonMaidWrapper.h(30,22): error C4368: cannot define 'moduleObj' as a member of managed 'NikonMaidWrapper::MaidBridge': mixed types are not supported
+  (compiling source file 'NikonMaidWrapper.cpp')
+  
+C:\Users\willi\image_gen\bridge-dotnet\NikonMaidWrapper\NikonMaidWrapper.h(31,22): error C4368: cannot define 'sourceObj' as a member of managed 'NikonMaidWrapper::MaidBridge': mixed types are not supported
+  (compiling source file 'NikonMaidWrapper.cpp')
+  
