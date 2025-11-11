@@ -115,6 +115,7 @@
         <button id="btnOpenLive">Open Stream</button>
         <button id="btnStopLive">Stop</button>
         <button id="btnShoot">Shoot</button>
+        <button id="btnRetry">Retry Download</button>
       </div>
     </div>
   </div>
@@ -199,6 +200,7 @@
     const btnOpenLive = document.getElementById('btnOpenLive');
     const btnStopLive = document.getElementById('btnStopLive');
     const btnShoot = document.getElementById('btnShoot');
+    const btnRetry = document.getElementById('btnRetry');
     const bridgeLiveEl = document.getElementById('bridgeLive');
 
     // Prefill watcher fields from config.json
@@ -412,10 +414,29 @@
           throw new Error(err.detail || 'shoot failed');
         }
         const data = await resp.json();
-        statusEl.textContent = 'Shoot triggered';
+        statusEl.textContent = data.message || 'Shoot triggered';
         // If bridge returns saved filenames, we could show them here later
       } catch (e) {
         statusEl.textContent = 'Shoot error: ' + e.message;
+      }
+    });
+
+    btnRetry.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Retrying MTP download...';
+        const bridgeUrl = bridgeUrlEl.value || 'http://localhost:9001';
+        const resp = await fetch(bridgeUrl + '/retry-copy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'retry failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = data.message || 'Retry complete';
+      } catch (e) {
+        statusEl.textContent = 'Retry error: ' + e.message;
       }
     });
 

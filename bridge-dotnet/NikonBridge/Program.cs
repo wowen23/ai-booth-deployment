@@ -189,6 +189,51 @@ app.MapPost("/shoot", async context => {
     }
 });
 
+// Retry MTP copy without triggering shutter
+app.MapPost("/retry-copy", async (HttpContext context) =>
+{
+    try
+    {
+        logger.LogInformation("Retrying MTP copy...");
+
+        // Try to copy via MTP multiple times
+        string? copiedFile = null;
+        for (int attempt = 1; attempt <= 5; attempt++)
+        {
+            logger.LogInformation("MTP copy attempt {Attempt}/5...", attempt);
+            copiedFile = CopyMostRecentPhotoFromMTP("Z 6_2", watchDir, logger);
+
+            if (copiedFile != null)
+            {
+                logger.LogInformation("Successfully copied on attempt {Attempt}: {File}", attempt, copiedFile);
+                break;
+            }
+
+            if (attempt < 5)
+            {
+                logger.LogWarning("MTP copy attempt {Attempt} failed, waiting 3 seconds before retry...", attempt);
+                await Task.Delay(3000);
+            }
+        }
+
+        if (copiedFile != null)
+        {
+            await context.Response.WriteAsJsonAsync(new { ok = true, files = new[] { copiedFile }, message = $"Successfully copied: {Path.GetFileName(copiedFile)}" });
+        }
+        else
+        {
+            logger.LogWarning("All MTP copy attempts failed");
+            await context.Response.WriteAsJsonAsync(new { ok = false, files = new string[0], message = "Failed to copy from MTP after 5 attempts. Check that camera is not connected to SDK." });
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error in retry-copy endpoint");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { detail = ex.ToString() });
+    }
+});
+
 // SDK control scaffolding
 app.MapPost("/sdk/connect", () => {
     try
