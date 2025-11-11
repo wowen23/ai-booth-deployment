@@ -115,6 +115,7 @@
         <button id="btnOpenLive">Open Stream</button>
         <button id="btnStopLive">Stop</button>
         <button id="btnShoot">Shoot</button>
+        <input type="text" id="startFileName" placeholder="e.g. WAO_9999" style="width:150px;margin-left:10px" />
         <button id="btnRetry">Retry Download</button>
       </div>
     </div>
@@ -425,7 +426,15 @@
       try {
         statusEl.textContent = 'Retrying MTP download...';
         const bridgeUrl = bridgeUrlEl.value || 'http://localhost:9001';
-        const resp = await fetch(bridgeUrl + '/retry-copy', {
+        const startFileNameEl = document.getElementById('startFileName');
+        const startFileName = startFileNameEl.value.trim();
+
+        let url = bridgeUrl + '/retry-copy';
+        if (startFileName) {
+          url += '?startFileName=' + encodeURIComponent(startFileName);
+        }
+
+        const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });

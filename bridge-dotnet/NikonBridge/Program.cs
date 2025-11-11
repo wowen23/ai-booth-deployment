@@ -194,14 +194,16 @@ app.MapPost("/retry-copy", async (HttpContext context) =>
 {
     try
     {
-        logger.LogInformation("Retrying MTP copy...");
+        // Get optional startFileName from query string
+        string? startFileName = context.Request.Query["startFileName"].FirstOrDefault();
+        logger.LogInformation("Retrying MTP copy (startFileName: {StartFile})...", startFileName ?? "none");
 
         // Try to copy via MTP multiple times
         string? copiedFile = null;
         for (int attempt = 1; attempt <= 5; attempt++)
         {
             logger.LogInformation("MTP copy attempt {Attempt}/5...", attempt);
-            copiedFile = CopyMostRecentPhotoFromMTP("Z 6_2", watchDir, logger);
+            copiedFile = CopyMostRecentPhotoFromMTP("Z 6_2", watchDir, logger, startFileName);
 
             if (copiedFile != null)
             {
@@ -355,7 +357,7 @@ await app.RunAsync($"http://0.0.0.0:{port}");
 return;
 
 // MTP file copy helper
-static string? CopyMostRecentPhotoFromMTP(string deviceName, string destDir, ILogger logger)
+static string? CopyMostRecentPhotoFromMTP(string deviceName, string destDir, ILogger logger, string? startFileName = null)
 {
     try
     {
@@ -463,44 +465,100 @@ static string? CopyMostRecentPhotoFromMTP(string deviceName, string destDir, ILo
         string mostRecentFolderName = newestFolder.Name;
         logger.LogInformation("Most recent folder: {Name}", mostRecentFolderName);
 
-        // Second pass: Find the most recent file in the most recent folder
+        // Second pass: Find the target file
         var targetFolder = newestFolder.GetFolder;
-        DateTime? newestTime = null;
-        dynamic? newestFile = null;
+        dynamic? targetFile = null;
+        string? targetFileName = null;
 
-        foreach (dynamic file in targetFolder.Items())
+        if (startFileName != null)
         {
-            if (!file.IsFolder)
+            // User provided a starting filename - search for it or the next one
+            logger.LogInformation("Looking for file starting from: {StartFile}", startFileName);
+
+            // Try to find exact match first
+            foreach (dynamic file in targetFolder.Items())
             {
-                try
+                if (!file.IsFolder)
                 {
-                    var modTime = file.ModifyDate;
-                    if (newestTime == null || modTime > newestTime)
+                    try
                     {
-                        newestTime = modTime;
-                        newestFile = file;
+                        string fileName = file.Name.ToString();
+                        if (fileName.Equals(startFileName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            targetFile = file;
+                            targetFileName = fileName;
+                            logger.LogInformation("Found exact match: {Name}", fileName);
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // If not found, try incrementing the number
+            if (targetFile == null)
+            {
+                logger.LogInformation("Exact match not found, looking for next file in sequence...");
+                foreach (dynamic file in targetFolder.Items())
+                {
+                    if (!file.IsFolder)
+                    {
+                        try
+                        {
+                            string fileName = file.Name.ToString();
+                            // Find files that come after the start filename alphabetically
+                            if (string.Compare(fileName, startFileName, StringComparison.OrdinalIgnoreCase) > 0)
+                            {
+                                if (targetFileName == null || string.Compare(fileName, targetFileName, StringComparison.OrdinalIgnoreCase) < 0)
+                                {
+                                    targetFile = file;
+                                    targetFileName = fileName;
+                                }
+                            }
+                        }
+                        catch { }
                     }
                 }
-                catch
+            }
+        }
+        else
+        {
+            // No start filename provided - find the most recent file by sorting
+            // Note: Z6 II MTP doesn't provide valid dates (all files return 1899-12-30)
+            // So we sort by filename instead - Nikon uses sequential filenames (WAO_0001, WAO_0002, etc.)
+            logger.LogInformation("No start filename provided, finding most recent file...");
+            foreach (dynamic file in targetFolder.Items())
+            {
+                if (!file.IsFolder)
                 {
-                    // Skip items without ModifyDate
+                    try
+                    {
+                        string fileName = file.Name.ToString();
+                        if (targetFileName == null || string.Compare(fileName, targetFileName, StringComparison.OrdinalIgnoreCase) > 0)
+                        {
+                            targetFileName = fileName;
+                            targetFile = file;
+                        }
+                    }
+                    catch { }
                 }
             }
         }
 
-        if (newestFile == null)
+        if (targetFile == null)
         {
-            logger.LogWarning("No photos found in DCIM");
+            logger.LogWarning("No photos found matching criteria");
             return null;
         }
 
         // Copy the file
-        string baseName = newestFile.Name.ToString();
+        string baseName = targetFile.Name.ToString();
+        logger.LogInformation("Target file: {Name}", baseName);
         logger.LogInformation("Copying {Source} to {DestDir}", baseName, destDir);
 
         // Use Shell to copy the file
         var destFolderObj = shell.NameSpace(destDir);
-        destFolderObj.CopyHere(newestFile, 16); // 16 = respond "Yes to All"
+        destFolderObj.CopyHere(targetFile, 16); // 16 = respond "Yes to All"
 
         // Wait a moment for copy to complete
         System.Threading.Thread.Sleep(2000);
