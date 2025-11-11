@@ -547,11 +547,31 @@ bool MaidBridge::StartLive()
         Console::WriteLine("[MAID] Switching to photo live view mode (0)...");
         selector = 0;
         result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewSelector,
-                          kNkMAIDDataType_Unsigned, &selector);
+                          kNkMAIDDataType_Unsigned, (void*)(NKPARAM)selector);  // Pass value as NKPARAM
         Console::WriteLine(String::Format("[MAID] LiveViewSelector Set: result={0}", result));
     }
 
-    // First, check CURRENT LiveViewStatus value
+    // FIRST: Check LiveViewProhibit before attempting to start live view
+    Console::WriteLine("[MAID] Checking LiveViewProhibit...");
+    ULONG prohibit = 0;
+    result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_LiveViewProhibit,
+                      kNkMAIDDataType_Unsigned, &prohibit);
+    Console::WriteLine(String::Format("[MAID] LiveViewProhibit CapGet: result={0}, value=0x{1:X8}", result, prohibit));
+
+    if (result == kNkMAIDResult_NoError && prohibit != 0) {
+        Console::WriteLine("[MAID] Live view is PROHIBITED! Reasons:");
+        if (prohibit & 0x10000000) Console::WriteLine("[MAID]   - 0x10000000: Lens/mount adapter issue or needs firmware update");
+        if (prohibit & 0x00020000) Console::WriteLine("[MAID]   - 0x00020000: High temperature");
+        if (prohibit & 0x00008000) Console::WriteLine("[MAID]   - 0x00008000: During photo shooting");
+        if (prohibit & 0x00000100) Console::WriteLine("[MAID]   - 0x00000100: Battery shortage");
+        if (prohibit & 0x00000004) Console::WriteLine("[MAID]   - 0x00000004: Sequence error");
+        Console::WriteLine("[MAID] Cannot start live view - resolve these issues first!");
+        // Continue anyway to get diagnostic info
+    } else if (result == kNkMAIDResult_NoError) {
+        Console::WriteLine("[MAID] Live view is allowed (no prohibitions)");
+    }
+
+    // Check CURRENT LiveViewStatus value
     // Try as Enum first since CapGet with Unsigned is failing with -126
     Console::WriteLine("[MAID] Checking current LiveViewStatus (trying Enum type)...");
     NkMAIDEnum stEnum;
@@ -573,18 +593,20 @@ bool MaidBridge::StartLive()
         Console::WriteLine(String::Format("[MAID] Could not read LiveViewStatus: error {0}", result));
     }
 
-    // Only try to set it if it's not already 3
-    if (result == kNkMAIDResult_NoError && currentStatus != 3) {
+    // Always try to set LiveViewStatus to 3 (Remote Live View)
+    // Even if we couldn't read the current status, the SET command should work
+    // IMPORTANT: For Unsigned type, pass the VALUE directly as NKPARAM (not a pointer) - see sample code
+    if (currentStatus != 3) {
         Console::WriteLine("[MAID] Attempting to set LiveViewStatus to 3 (Remote Live View)...");
-        ULONG status = 3;
+        ULONG status = 3;  // kNkMAIDLiveViewStatus_ON_RemoteLV
         result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
-                          kNkMAIDDataType_Unsigned, &status);
+                          kNkMAIDDataType_Unsigned, (void*)(NKPARAM)status);  // Pass value as NKPARAM
         Console::WriteLine(String::Format("[MAID] LiveViewStatus Set(3): result={0}", result));
 
         if (result != kNkMAIDResult_NoError) {
             Console::WriteLine(String::Format("[MAID] Warning: Could not set LiveViewStatus: error {0}", result));
         }
-    } else if (currentStatus == 3) {
+    } else {
         Console::WriteLine("[MAID] LiveViewStatus is already 3 (Remote Live View)!");
     }
 
@@ -641,7 +663,7 @@ void MaidBridge::StopLive()
     // Set LiveViewStatus to 0 (OFF) to stop live view
     ULONG status = 0;
     SLONG result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
-                            kNkMAIDDataType_Unsigned, &status);
+                            kNkMAIDDataType_Unsigned, (void*)(NKPARAM)status);  // Pass value as NKPARAM
     Console::WriteLine(String::Format("[MAID] StopLive CapSet(0) returned: {0}", result));
 
     liveRunning = false;
@@ -655,32 +677,72 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
 
     NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
 
-    // Get live view image using CapGet (NOT CapGetArray!)
-    // Pre-allocate buffer just like in StartLive
+    // Follow the Nikon sample code pattern (GetArrayCapability):
+    // 1. Call CapGet to get the size
+    // 2. Allocate buffer based on size
+    // 3. Call CapGetArray to fill the buffer
+
     NkMAIDArray stArray;
     memset(&stArray, 0, sizeof(NkMAIDArray));
 
-    ULONG bufferSize = 1024 * 1024; // 1MB buffer
-    stArray.pData = malloc(bufferSize);
-    if (stArray.pData == nullptr) {
-        return gcnew array<System::Byte>(0);
-    }
-    stArray.ulElements = bufferSize;
-
+    // Step 1: Call CapGet to get size
+    Console::WriteLine("[MAID] GetLiveFrame: Step 1 - Calling CapGet to get size...");
     SLONG result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
                             kNkMAIDDataType_ArrayPtr, &stArray);
+    Console::WriteLine(String::Format("[MAID] CapGet result={0}, ulElements={1}, wPhysicalBytes={2}",
+                      result, stArray.ulElements, stArray.wPhysicalBytes));
 
-    if (result != kNkMAIDResult_NoError || stArray.pData == nullptr || stArray.ulElements == 0) {
-        if (stArray.pData != nullptr) free(stArray.pData);
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] GetLiveFrame CapGet failed with error {0}", result));
+        return gcnew array<System::Byte>(0);
+    }
+
+    if (stArray.ulElements == 0) {
+        Console::WriteLine("[MAID] No data available (ulElements=0)");
+        return gcnew array<System::Byte>(0);
+    }
+
+    // Step 2: Allocate buffer (WE manage memory, not SDK)
+    Console::WriteLine("[MAID] GetLiveFrame: Step 2 - Allocating buffer...");
+    stArray.pData = malloc(stArray.ulElements * stArray.wPhysicalBytes);
+    if (stArray.pData == nullptr) {
+        Console::WriteLine("[MAID] Failed to allocate memory");
+        return gcnew array<System::Byte>(0);
+    }
+
+    // Step 3: Call CapGetArray to fill the buffer
+    Console::WriteLine("[MAID] GetLiveFrame: Step 3 - Calling CapGetArray to fill buffer...");
+    result = CallMAID(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
+                     kNkMAIDDataType_ArrayPtr, &stArray);
+    Console::WriteLine(String::Format("[MAID] CapGetArray result={0}", result));
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] GetLiveFrame CapGetArray failed with error {0}", result));
+        free(stArray.pData);
         return gcnew array<System::Byte>(0);
     }
 
     // Live view data has 512-byte header followed by JPEG data
     ULONG headerSize = 512;
+    ULONG dataSize = stArray.ulElements * stArray.wPhysicalBytes;
+
+    // Debug: Check first few bytes to see if buffer has data
     unsigned char* pData = static_cast<unsigned char*>(stArray.pData);
-    ULONG dataSize = stArray.ulElements;
+    Console::WriteLine(String::Format("[MAID] First 16 bytes: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2} {8:X2} {9:X2} {10:X2} {11:X2} {12:X2} {13:X2} {14:X2} {15:X2}",
+                      pData[0], pData[1], pData[2], pData[3], pData[4], pData[5], pData[6], pData[7],
+                      pData[8], pData[9], pData[10], pData[11], pData[12], pData[13], pData[14], pData[15]));
+
+    // Check after the 512-byte header for JPEG marker (FF D8)
+    if (dataSize > 512) {
+        Console::WriteLine(String::Format("[MAID] Bytes 512-527: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2} {8:X2} {9:X2} {10:X2} {11:X2} {12:X2} {13:X2} {14:X2} {15:X2}",
+                          pData[512], pData[513], pData[514], pData[515], pData[516], pData[517], pData[518], pData[519],
+                          pData[520], pData[521], pData[522], pData[523], pData[524], pData[525], pData[526], pData[527]));
+    }
+
+    Console::WriteLine(String::Format("[MAID] Total data size: {0} bytes", dataSize));
 
     if (dataSize <= headerSize) {
+        Console::WriteLine("[MAID] Data too small for header");
         free(stArray.pData);
         return gcnew array<System::Byte>(0);
     }
@@ -690,7 +752,7 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
     array<System::Byte>^ jpegData = gcnew array<System::Byte>(jpegSize);
     System::Runtime::InteropServices::Marshal::Copy(IntPtr(pData + headerSize), jpegData, 0, jpegSize);
 
-    // Free the native buffer
+    // Free the native buffer that SDK allocated
     free(stArray.pData);
 
     Console::WriteLine(String::Format("[MAID] GetLiveFrame returning {0} bytes (total {1} - header {2})",

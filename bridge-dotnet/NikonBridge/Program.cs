@@ -210,21 +210,35 @@ app.MapGet("/sdk/test-frame", () => {
     try
     {
         if (maid == null) return Results.Problem("MAID wrapper not initialized", statusCode: 500);
+
+        logger.LogInformation("Getting test frame...");
         var frameBytes = maid.GetLiveFrame();
+        logger.LogInformation($"Got {frameBytes?.Length ?? 0} bytes");
+
         if (frameBytes == null || frameBytes.Length == 0)
         {
             return Results.Problem("No frame data received", statusCode: 500);
         }
 
-        // Save to file for testing
-        var testPath = Path.Combine(watchDir, "test_frame.jpg");
-        File.WriteAllBytes(testPath, frameBytes);
+        // Save to multiple locations for testing
+        var testPath1 = Path.Combine(watchDir, "test_frame.jpg");
+        var testPath2 = Path.Combine(AppContext.BaseDirectory, "test_frame.jpg");
+        var testPath3 = @"C:\Users\willi\image_gen\test_images\test_frame.jpg";
+
+        File.WriteAllBytes(testPath1, frameBytes);
+        File.WriteAllBytes(testPath2, frameBytes);
+        File.WriteAllBytes(testPath3, frameBytes);
+
+        logger.LogInformation($"Saved to: {testPath1}");
+        logger.LogInformation($"Saved to: {testPath2}");
+        logger.LogInformation($"Saved to: {testPath3}");
 
         // Also return as JPEG
         return Results.File(frameBytes, "image/jpeg");
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error getting test frame");
         return Results.Problem(ex.Message, statusCode: 500);
     }
 });
