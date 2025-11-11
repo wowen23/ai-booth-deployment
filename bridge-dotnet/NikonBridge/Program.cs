@@ -120,8 +120,11 @@ app.MapGet("/live.mjpg", async context => {
 app.MapPost("/shoot", async context => {
     try
     {
+        logger.LogInformation("Shoot endpoint called");
+
         if (!sdk.Connected)
         {
+            logger.LogWarning("Shoot: Not connected");
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             await context.Response.WriteAsJsonAsync(new { detail = "Not connected. Call /sdk/connect first." });
             return;
@@ -129,17 +132,58 @@ app.MapPost("/shoot", async context => {
 
         if (maid == null)
         {
+            logger.LogWarning("Shoot: MAID wrapper not initialized");
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await context.Response.WriteAsJsonAsync(new { detail = "MAID wrapper not initialized" });
             return;
         }
 
-        // Call the real camera shoot function
-        var files = maid.Shoot(watchDir);
-        await context.Response.WriteAsJsonAsync(new { ok = true, files = files });
+        // Trigger the shutter
+        logger.LogInformation("Triggering camera shutter...");
+        maid.Shoot(watchDir); // This triggers the shutter, image saves to SD card
+
+        // Disconnect SDK to allow MTP access
+        logger.LogInformation("Disconnecting SDK to enable MTP access...");
+        try
+        {
+            maid.StopLive();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error stopping live view (may already be stopped)");
+        }
+
+        try
+        {
+            maid.Disconnect();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error disconnecting SDK");
+        }
+
+        // Wait for camera to release USB and enable MTP
+        logger.LogInformation("Waiting for camera to enable MTP access...");
+        await Task.Delay(3000);
+
+        // Try to copy via MTP
+        logger.LogInformation("Attempting to copy from MTP...");
+        var copiedFile = CopyMostRecentPhotoFromMTP("Z 6_2", watchDir, logger);
+
+        if (copiedFile != null)
+        {
+            logger.LogInformation("Successfully copied: {File}", copiedFile);
+            await context.Response.WriteAsJsonAsync(new { ok = true, files = new[] { copiedFile }, message = "Photo captured and copied. Note: Camera was disconnected - click 'Connect Camera' to resume live view." });
+        }
+        else
+        {
+            logger.LogWarning("Photo captured but file copy from MTP failed");
+            await context.Response.WriteAsJsonAsync(new { ok = true, files = new string[0], message = "Photo captured to camera SD card, but MTP transfer failed. Click 'Connect Camera' to reconnect." });
+        }
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Error in shoot endpoint");
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         await context.Response.WriteAsJsonAsync(new { detail = ex.ToString() });
     }
@@ -262,6 +306,192 @@ app.Lifetime.ApplicationStarted.Register(() => {
 });
 
 await app.RunAsync($"http://0.0.0.0:{port}");
+
+return;
+
+// MTP file copy helper
+static string? CopyMostRecentPhotoFromMTP(string deviceName, string destDir, ILogger logger)
+{
+    try
+    {
+        logger.LogInformation("Accessing MTP device: {Device}", deviceName);
+
+        // Create Shell object to access MTP devices
+        Type shellType = Type.GetTypeFromProgID("Shell.Application");
+        if (shellType == null)
+        {
+            logger.LogError("Failed to get Shell.Application COM object");
+            return null;
+        }
+
+        dynamic shell = Activator.CreateInstance(shellType);
+
+        // Get "This PC" namespace (0x11 = ssfDRIVES)
+        dynamic folder = shell.NameSpace(0x11);
+
+        // Find the camera device
+        dynamic? cameraFolder = null;
+        foreach (dynamic item in folder.Items())
+        {
+            if (item.Name == deviceName)
+            {
+                string deviceNameStr = item.Name;
+                logger.LogInformation("Found device: {Name}", deviceNameStr);
+                cameraFolder = item.GetFolder;
+                break;
+            }
+        }
+
+        if (cameraFolder == null)
+        {
+            logger.LogWarning("Camera device '{Device}' not found", deviceName);
+            return null;
+        }
+
+        // Navigate to storage (could be "Removable storage" or "SD card" or similar)
+        dynamic? storageFolder = null;
+        logger.LogInformation("Enumerating camera storage items...");
+        foreach (dynamic item in cameraFolder.Items())
+        {
+            string itemName = item.Name;
+            bool isFolder = item.IsFolder;
+            logger.LogInformation("  Item: {Name} (IsFolder: {IsFolder})", itemName, isFolder);
+
+            if (isFolder && (itemName.Contains("Removable") || itemName.Contains("SD") || itemName.Contains("Storage") || itemName.Contains("Card")))
+            {
+                logger.LogInformation("Found storage: {Name}", itemName);
+                storageFolder = item.GetFolder;
+                break;
+            }
+        }
+
+        if (storageFolder == null)
+        {
+            logger.LogWarning("Storage not found - tried looking for folders with 'Removable', 'SD', 'Storage', or 'Card' in the name");
+            return null;
+        }
+
+        // Navigate to DCIM
+        dynamic? dcimFolder = null;
+        foreach (dynamic item in storageFolder.Items())
+        {
+            if (item.Name == "DCIM")
+            {
+                logger.LogInformation("Found DCIM folder");
+                dcimFolder = item.GetFolder;
+                break;
+            }
+        }
+
+        if (dcimFolder == null)
+        {
+            logger.LogWarning("DCIM folder not found");
+            return null;
+        }
+
+        // Find most recent folder in DCIM by name (e.g., 101NZ6_2, 102NZ6_2, 103NZ6_2)
+        // Folders are numbered sequentially, so highest number = most recent
+        // Then find the most recent file in that folder
+        string? highestFolderName = null;
+        dynamic? newestFolder = null;
+
+        // First pass: Find the folder with the highest name (alphabetically last)
+        foreach (dynamic photoFolder in dcimFolder.Items())
+        {
+            if (photoFolder.IsFolder)
+            {
+                string folderName = photoFolder.Name;
+                if (highestFolderName == null || string.Compare(folderName, highestFolderName, StringComparison.Ordinal) > 0)
+                {
+                    highestFolderName = folderName;
+                    newestFolder = photoFolder;
+                }
+            }
+        }
+
+        if (newestFolder == null)
+        {
+            logger.LogWarning("No photo folders found in DCIM");
+            return null;
+        }
+
+        string mostRecentFolderName = newestFolder.Name;
+        logger.LogInformation("Most recent folder: {Name}", mostRecentFolderName);
+
+        // Second pass: Find the most recent file in the most recent folder
+        var targetFolder = newestFolder.GetFolder;
+        DateTime? newestTime = null;
+        dynamic? newestFile = null;
+
+        foreach (dynamic file in targetFolder.Items())
+        {
+            if (!file.IsFolder)
+            {
+                try
+                {
+                    var modTime = file.ModifyDate;
+                    if (newestTime == null || modTime > newestTime)
+                    {
+                        newestTime = modTime;
+                        newestFile = file;
+                    }
+                }
+                catch
+                {
+                    // Skip items without ModifyDate
+                }
+            }
+        }
+
+        if (newestFile == null)
+        {
+            logger.LogWarning("No photos found in DCIM");
+            return null;
+        }
+
+        // Copy the file
+        string baseName = newestFile.Name.ToString();
+        logger.LogInformation("Copying {Source} to {DestDir}", baseName, destDir);
+
+        // Use Shell to copy the file
+        var destFolderObj = shell.NameSpace(destDir);
+        destFolderObj.CopyHere(newestFile, 16); // 16 = respond "Yes to All"
+
+        // Wait a moment for copy to complete
+        System.Threading.Thread.Sleep(2000);
+
+        // CopyHere() automatically adds proper extension (.JPG, .NEF, etc.)
+        // Try common extensions to find the copied file
+        var possiblePaths = new[]
+        {
+            Path.Combine(destDir, baseName),
+            Path.Combine(destDir, $"{baseName}.JPG"),
+            Path.Combine(destDir, $"{baseName}.jpg"),
+            Path.Combine(destDir, $"{baseName}.NEF"),
+            Path.Combine(destDir, $"{baseName}.nef"),
+            Path.Combine(destDir, $"{baseName}.JPEG"),
+            Path.Combine(destDir, $"{baseName}.jpeg")
+        };
+
+        foreach (var path in possiblePaths)
+        {
+            if (File.Exists(path))
+            {
+                string copiedPath = path;
+                logger.LogInformation("Successfully copied file: {Path}", copiedPath);
+                return path;
+            }
+        }
+
+        logger.LogWarning("File copy may have failed - file not found at any expected path");
+        return null;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error copying from MTP device");
+        return null;
+    }
+}
 
 // --- Stubs to be replaced with Nikon SDK integration ---
 class SdkStub

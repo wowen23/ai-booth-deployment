@@ -134,12 +134,12 @@
     </Link>
   </ItemDefinitionGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(ProjectDir)..\NikonBridge\bin\$(Configuration)\net8.0\</OutDir>
+    <OutDir>$(ProjectDir)..\NikonBridge\bin\$(Platform)\$(Configuration)\net8.0\</OutDir>
     <CLRSupportNetCore>true</CLRSupportNetCore>
     <ManagedAssembly>true</ManagedAssembly>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(ProjectDir)..\NikonBridge\bin\$(Configuration)\net8.0\</OutDir>
+    <OutDir>$(ProjectDir)..\NikonBridge\bin\$(Platform)\$(Configuration)\net8.0\</OutDir>
     <CLRSupportNetCore>true</CLRSupportNetCore>
     <ManagedAssembly>true</ManagedAssembly>
   </PropertyGroup>

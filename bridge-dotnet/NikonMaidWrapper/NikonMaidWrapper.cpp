@@ -761,33 +761,316 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
     return jpegData;
 }
 
+// Helper structure for capture context (native, not managed)
+struct CaptureContext {
+    volatile bool captureComplete;
+    volatile SLONG newItemID;
+    LPVOID imageBuffer;
+    ULONG bufferSize;
+    ULONG fileDataType;  // kNkMAIDFileDataType_JPEG, etc.
+    char watchDirPath[512];
+    char savedFilePath[512];
+    volatile bool downloadComplete;
+    volatile NKERROR lastError;
+};
+
+// Global capture context (simplified - in production use better lifecycle management)
+static CaptureContext g_captureCtx{};
+
+// Completion callback for async operations
+static void CALLPASCAL CompletionProc_Capture(
+    LPNkMAIDObject pObject,
+    ULONG ulCommand,
+    ULONG ulParam,
+    ULONG ulDataType,
+    NKPARAM data,
+    NKREF refComplete,
+    NKERROR nResult)
+{
+    CaptureContext* pCtx = (CaptureContext*)refComplete;
+
+    if (ulCommand == kNkMAIDCommand_CapStart && ulParam == kNkMAIDCapability_Capture) {
+        // Capture completed
+        pCtx->captureComplete = true;
+        pCtx->lastError = nResult;
+        printf("[MAID] CompletionProc: Capture complete, result=%d\n", nResult);
+    }
+    else if (ulCommand == kNkMAIDCommand_CapStart && ulParam == kNkMAIDCapability_Acquire) {
+        // Acquire (download) completed
+        pCtx->downloadComplete = true;
+        pCtx->lastError = nResult;
+        printf("[MAID] CompletionProc: Acquire complete, result=%d\n", nResult);
+    }
+}
+
+// Event callback for detecting new items after capture
+static NKERROR CALLPASCAL EventProc_Capture(NKREF refProc, ULONG ulEvent, NKPARAM data)
+{
+    CaptureContext* pCtx = (CaptureContext*)refProc;
+
+    if (ulEvent == kNkMAIDEvent_AddChild) {
+        // New item (image) detected!
+        pCtx->newItemID = (SLONG)data;
+        printf("[MAID] EventProc: AddChild event, itemID=%d\n", pCtx->newItemID);
+    }
+
+    return kNkMAIDResult_NoError;
+}
+
+// DataProc callback for receiving image data chunks
+static NKERROR CALLPASCAL DataProc_Capture(NKREF ref, LPVOID pInfo, LPVOID pData)
+{
+    CaptureContext* pCtx = (CaptureContext*)ref;
+    LPNkMAIDDataInfo pDataInfo = (LPNkMAIDDataInfo)pInfo;
+
+    if (pDataInfo->ulType & kNkMAIDDataObjType_File) {
+        // File data (JPEG/NEF/TIFF)
+        LPNkMAIDFileInfo pFileInfo = (LPNkMAIDFileInfo)pInfo;
+
+        // Allocate buffer on first chunk
+        if (pCtx->imageBuffer == NULL) {
+            pCtx->bufferSize = pFileInfo->ulTotalLength;
+            pCtx->imageBuffer = malloc(pCtx->bufferSize);
+            pCtx->fileDataType = pFileInfo->ulFileDataType;
+            printf("[MAID] DataProc: Allocating %u bytes for image\n", pCtx->bufferSize);
+
+            if (pCtx->imageBuffer == NULL) {
+                printf("[MAID] DataProc: Out of memory!\n");
+                return kNkMAIDResult_OutOfMemory;
+            }
+        }
+
+        // Copy this chunk
+        ULONG offset = pFileInfo->ulTotalLength - pFileInfo->ulLength;
+        memcpy((char*)pCtx->imageBuffer + offset, pData, pFileInfo->ulLength);
+
+        printf("[MAID] DataProc: Received chunk at offset %u, size %u (total %u)\n",
+               offset, pFileInfo->ulLength, pFileInfo->ulTotalLength);
+
+        // Check if transfer complete
+        if (offset + pFileInfo->ulLength >= pFileInfo->ulTotalLength) {
+            printf("[MAID] DataProc: Transfer complete, saving file...\n");
+
+            // Determine file extension
+            const char* ext = ".dat";
+            switch(pCtx->fileDataType) {
+                case kNkMAIDFileDataType_JPEG: ext = ".jpg"; break;
+                case kNkMAIDFileDataType_TIFF: ext = ".tif"; break;
+                case kNkMAIDFileDataType_NIF:  ext = ".nef"; break;
+            }
+
+            // Generate unique filename
+            char filename[256];
+            int i = 0;
+            FILE* testFile = NULL;
+            do {
+                sprintf_s(filename, sizeof(filename), "capture_%03d%s", ++i, ext);
+                sprintf_s(pCtx->savedFilePath, sizeof(pCtx->savedFilePath), "%s\\%s",
+                         pCtx->watchDirPath, filename);
+                fopen_s(&testFile, pCtx->savedFilePath, "r");
+                if (testFile) fclose(testFile);
+            } while (testFile != NULL && i < 999);
+
+            // Write file
+            FILE* outFile = NULL;
+            fopen_s(&outFile, pCtx->savedFilePath, "wb");
+            if (outFile) {
+                fwrite(pCtx->imageBuffer, 1, pCtx->bufferSize, outFile);
+                fclose(outFile);
+                printf("[MAID] DataProc: Saved to %s\n", pCtx->savedFilePath);
+            } else {
+                printf("[MAID] DataProc: Failed to open file for writing!\n");
+                return kNkMAIDResult_UnexpectedError;
+            }
+
+            // Free buffer
+            free(pCtx->imageBuffer);
+            pCtx->imageBuffer = NULL;
+        }
+    }
+
+    return kNkMAIDResult_NoError;
+}
+
 array<System::String^>^ MaidBridge::Shoot(System::String^ watchDir)
 {
+    Console::WriteLine("[MAID] Shoot() called - triggering shutter and downloading from SD card");
+
     if (!connected || pSourceObj == IntPtr::Zero) {
+        Console::WriteLine("[MAID] Shoot: Not connected or no source");
         return gcnew array<System::String^>(0);
     }
 
     NkMAIDObject* pSrc = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
 
-    // Trigger capture using CapStart on kNkMAIDCapability_Capture
-    // This will trigger the shutter and the camera will save to its card or buffer
+    // Initialize capture context
+    memset(&g_captureCtx, 0, sizeof(g_captureCtx));
+
+    // Convert watchDir to native string
+    std::string watchDirNative = msclr::interop::marshal_as<std::string>(watchDir);
+    strncpy_s(g_captureCtx.watchDirPath, sizeof(g_captureCtx.watchDirPath),
+              watchDirNative.c_str(), _TRUNCATE);
+
+    Console::WriteLine("[MAID] Shoot: Triggering shutter (CapStart on Capture)...");
+
+    // Trigger capture
     SLONG result = CallMAID(pSrc, kNkMAIDCommand_CapStart, kNkMAIDCapability_Capture,
-                            kNkMAIDDataType_Null, NULL);
+                      kNkMAIDDataType_Null, NULL);
 
     if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Shoot: CapStart failed with error {0}", result));
         throw gcnew Exception("Failed to trigger capture. Error code: " + result.ToString());
     }
 
-    // NOTE: Full implementation would:
-    // 1. Wait for capture complete event
-    // 2. Enumerate item children to find new image object
-    // 3. Open item object
-    // 4. Acquire image data and save to watchDir
-    //
-    // For now, this triggers the shutter. Images will be saved to the camera's memory card.
-    // The web app's folder watcher can pick up images if they're transferred to the watch directory.
+    Console::WriteLine("[MAID] Shoot: Waiting for camera to finish capture...");
 
-    return gcnew array<System::String^>(0);
+    // Wait and retry enumeration a few times
+    int retries = 5;
+    bool enumSuccess = false;
+
+    for (int i = 0; i < retries && !enumSuccess; i++) {
+        System::Threading::Thread::Sleep(1000);  // Wait 1 second between tries
+
+        Console::WriteLine(String::Format("[MAID] Shoot: Enumerating items (attempt {0}/{1})...", i + 1, retries));
+        result = CallMAID(pSrc, kNkMAIDCommand_EnumChildren, 0, kNkMAIDDataType_Null, NULL);
+
+        if (result == kNkMAIDResult_NoError) {
+            enumSuccess = true;
+        } else {
+            Console::WriteLine(String::Format("[MAID] EnumChildren returned error {0}, retrying...", result));
+        }
+    }
+
+    if (!enumSuccess) {
+        Console::WriteLine("[MAID] Failed to enumerate children after multiple attempts");
+        return gcnew array<System::String^>(0);
+    }
+
+    // Get list of items
+    NkMAIDEnum stItemEnum;
+    memset(&stItemEnum, 0, sizeof(stItemEnum));
+    result = CallMAID(pSrc, kNkMAIDCommand_CapGet, kNkMAIDCapability_Children,
+                      kNkMAIDDataType_EnumPtr, &stItemEnum);
+
+    if (result != kNkMAIDResult_NoError || stItemEnum.ulElements == 0) {
+        Console::WriteLine("[MAID] No items found on SD card");
+        return gcnew array<System::String^>(0);
+    }
+
+    Console::WriteLine(String::Format("[MAID] Found {0} items on SD card", stItemEnum.ulElements));
+
+    // Allocate buffer for item IDs
+    ULONG* pItemIDs = new ULONG[stItemEnum.ulElements];
+    stItemEnum.pData = pItemIDs;
+
+    result = CallMAID(pSrc, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_Children,
+                      kNkMAIDDataType_EnumPtr, &stItemEnum);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] CapGetArray failed (error {0})", result));
+        delete[] pItemIDs;
+        return gcnew array<System::String^>(0);
+    }
+
+    // Use the last item (most recent)
+    ULONG latestItemID = pItemIDs[stItemEnum.ulElements - 1];
+    delete[] pItemIDs;
+
+    Console::WriteLine(String::Format("[MAID] Latest item ID: {0}", latestItemID));
+
+    // Open the latest Item
+    Console::WriteLine("[MAID] Shoot: Opening item object...");
+    NkMAIDObject itemObj{};
+    itemObj.refClient = (NKREF)&g_captureCtx;
+
+    result = CallMAID(pSrc, kNkMAIDCommand_Open, latestItemID,
+                      kNkMAIDDataType_ObjectPtr, &itemObj);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Shoot: Failed to open item (error {0})", result));
+        return gcnew array<System::String^>(0);
+    }
+
+    Console::WriteLine("[MAID] Shoot: Enumerating item children (data objects)...");
+    result = CallMAID(&itemObj, kNkMAIDCommand_EnumChildren, 0, kNkMAIDDataType_Null, NULL);
+
+    // Call Async to let enumeration complete
+    for (int i = 0; i < 10; i++) {
+        CallMAID(&itemObj, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
+        System::Threading::Thread::Sleep(50);
+    }
+
+    // Open the Image data object
+    Console::WriteLine("[MAID] Shoot: Opening image data object...");
+    NkMAIDObject imageObj{};
+    imageObj.refClient = (NKREF)&g_captureCtx;
+
+    result = CallMAID(&itemObj, kNkMAIDCommand_Open, kNkMAIDDataObjType_Image,
+                      kNkMAIDDataType_ObjectPtr, &imageObj);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Shoot: Failed to open image object (error {0})", result));
+        result = g_pMAIDEntryPoint(pSrc, kNkMAIDCommand_Close, itemObj.ulID, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        return gcnew array<System::String^>(0);
+    }
+
+    // Set DataProc callback
+    Console::WriteLine("[MAID] Shoot: Setting DataProc callback...");
+    NkMAIDCallback dataProc;
+    dataProc.pProc = (LPNKFUNC)DataProc_Capture;
+    dataProc.refProc = (NKREF)&g_captureCtx;
+
+    result = CallMAID(&imageObj, kNkMAIDCommand_CapSet, kNkMAIDCapability_DataProc,
+                      kNkMAIDDataType_CallbackPtr, &dataProc);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Warning: Failed to set DataProc (error {0})", result));
+    }
+
+    // Start acquiring (downloading) image
+    Console::WriteLine("[MAID] Shoot: Starting image acquisition from SDRAM...");
+    g_captureCtx.downloadComplete = false;
+
+    result = CallMAID(&imageObj, kNkMAIDCommand_CapStart, kNkMAIDCapability_Acquire,
+                      kNkMAIDDataType_Null, NULL);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Shoot: Acquire failed (error {0})", result));
+        g_pMAIDEntryPoint(&itemObj, kNkMAIDCommand_Close, imageObj.ulID, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        g_pMAIDEntryPoint(pSrc, kNkMAIDCommand_Close, itemObj.ulID, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        return gcnew array<System::String^>(0);
+    }
+
+    // Wait for download to complete
+    Console::WriteLine("[MAID] Shoot: Waiting for download...");
+    int waited = 0;
+    int maxWait = 200; // 20 seconds
+    while (!g_captureCtx.downloadComplete && waited < maxWait) {
+        CallMAID(&imageObj, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
+        System::Threading::Thread::Sleep(100);
+        waited++;
+    }
+
+    // Reset DataProc
+    CallMAID(&imageObj, kNkMAIDCommand_CapSet, kNkMAIDCapability_DataProc,
+             kNkMAIDDataType_Null, NULL);
+
+    // Close objects
+    Console::WriteLine("[MAID] Shoot: Closing objects...");
+    g_pMAIDEntryPoint(&itemObj, kNkMAIDCommand_Close, imageObj.ulID, kNkMAIDDataType_Null, NULL, NULL, NULL);
+    g_pMAIDEntryPoint(pSrc, kNkMAIDCommand_Close, itemObj.ulID, kNkMAIDDataType_Null, NULL, NULL, NULL);
+
+    // Return result
+    if (g_captureCtx.savedFilePath[0] != '\0') {
+        Console::WriteLine(String::Format("[MAID] Shoot: Success! File saved: {0}",
+                          gcnew String(g_captureCtx.savedFilePath)));
+        array<System::String^>^ files = gcnew array<System::String^>(1);
+        files[0] = gcnew String(g_captureCtx.savedFilePath);
+        return files;
+    } else {
+        Console::WriteLine("[MAID] Shoot: No file was saved");
+        return gcnew array<System::String^>(0);
+    }
 }
 
 System::String^ MaidBridge::TestLiveViewMode()
