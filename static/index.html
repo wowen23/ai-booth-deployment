@@ -110,8 +110,10 @@
     <div>
       <label>&nbsp;</label>
       <div>
-        <button id="btnOpenLive">Open Live View</button>
-        <button id="btnStopLive">Stop Live View</button>
+        <button id="btnConnect">Connect Camera</button>
+        <button id="btnStartLive">Start Live View</button>
+        <button id="btnOpenLive">Open Stream</button>
+        <button id="btnStopLive">Stop</button>
         <button id="btnShoot">Shoot</button>
       </div>
     </div>
@@ -354,14 +356,49 @@
     startCamEl.addEventListener('click', startCamera);
 
     // SDK bridge handlers
+    // SDK Camera Control
+    const btnConnect = document.getElementById('btnConnect');
+    const btnStartLive = document.getElementById('btnStartLive');
+
+    btnConnect.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Connecting to camera...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const resp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!resp.ok) throw new Error('Connect failed');
+        statusEl.textContent = 'Camera connected!';
+      } catch (e) {
+        statusEl.textContent = 'Connect error: ' + e.message;
+      }
+    });
+
+    btnStartLive.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Starting live view...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+        statusEl.textContent = 'Live view started! Click "Open Stream" to view.';
+      } catch (e) {
+        statusEl.textContent = 'Start live error: ' + e.message;
+      }
+    });
+
     btnOpenLive.addEventListener('click', () => {
       const url = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '') + '/live.mjpg?ts=' + Date.now();
       bridgeLiveEl.src = url;
-      statusEl.textContent = 'Opening SDK live view...';
+      statusEl.textContent = 'Opening MJPEG stream...';
     });
-    btnStopLive.addEventListener('click', () => {
+
+    btnStopLive.addEventListener('click', async () => {
       bridgeLiveEl.src = '';
-      statusEl.textContent = 'SDK live view stopped';
+      try {
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        await fetch(bridge + '/sdk/stop-live', { method: 'POST' });
+      } catch (e) {
+        // Ignore errors
+      }
+      statusEl.textContent = 'Live view stopped';
     });
     btnShoot.addEventListener('click', async () => {
       try {

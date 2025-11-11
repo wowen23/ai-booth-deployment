@@ -18,7 +18,21 @@ var config = builder.Configuration;
 var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
 var logger = loggerFactory.CreateLogger("NikonBridge");
 
+// Add CORS support for web UI
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 var app = builder.Build();
+
+// Enable CORS
+app.UseCors();
 
 // Read settings
 var watchDir = Environment.GetEnvironmentVariable("WATCH_DIR")
