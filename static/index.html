@@ -387,10 +387,22 @@
       }
     });
 
-    btnOpenLive.addEventListener('click', () => {
-      const url = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '') + '/live.mjpg?ts=' + Date.now();
-      bridgeLiveEl.src = url;
-      statusEl.textContent = 'Opening MJPEG stream...';
+    btnOpenLive.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Starting live view...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+        // First start live view
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+
+        // Then open the stream
+        const url = bridge + '/live.mjpg?ts=' + Date.now();
+        bridgeLiveEl.src = url;
+        statusEl.textContent = 'MJPEG stream opened';
+      } catch (e) {
+        statusEl.textContent = 'Open stream error: ' + e.message;
+      }
     });
 
     btnStopLive.addEventListener('click', async () => {
