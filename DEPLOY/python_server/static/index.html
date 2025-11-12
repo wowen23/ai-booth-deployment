@@ -317,6 +317,21 @@
                 previewEl.src = editData.files[0] + '?ts=' + Date.now();
                 statusEl.textContent = 'AI editing complete! Photo ready.';
                 appendResults(editData.files);
+
+                // Automatically reconnect camera for next shot
+                btnBoothShoot.textContent = 'RECONNECTING...';
+                statusEl.textContent = 'Reconnecting camera...';
+                try {
+                  const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+                  const reconnectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+                  if (reconnectResp.ok) {
+                    statusEl.textContent = 'Ready for next photo!';
+                  } else {
+                    statusEl.textContent = 'Photo complete! (Reconnect camera manually for next shot)';
+                  }
+                } catch (reconnectErr) {
+                  statusEl.textContent = 'Photo complete! (Reconnect camera manually for next shot)';
+                }
               } else {
                 statusEl.textContent = 'AI editing completed but no results returned';
               }
