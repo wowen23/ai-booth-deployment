@@ -270,12 +270,59 @@
         const data = await resp.json();
         statusEl.textContent = data.message || 'Photo captured!';
 
-        // Show captured image in preview
+        // Process captured image with AI
         if (data.files && data.files.length > 0) {
           const filePath = data.files[0];
           const filename = filePath.split(/[/\\]/).pop();
+
           if (filename) {
-            previewEl.src = '/inputs/' + filename + '?ts=' + Date.now();
+            // Show original in preview briefly
+            const capturedUrl = '/inputs/' + filename + '?ts=' + Date.now();
+            previewEl.src = capturedUrl;
+
+            // Get selected style
+            const stylePath = styleEl.value;
+            if (!stylePath) {
+              statusEl.textContent = 'Photo captured! (No style selected for AI editing)';
+              btnBoothShoot.textContent = originalText;
+              isCountingDown = false;
+              return;
+            }
+
+            // Fetch the image and process with AI
+            btnBoothShoot.textContent = 'AI EDITING...';
+            statusEl.textContent = 'Applying AI style transformation...';
+
+            try {
+              // Fetch the captured image
+              const imgResp = await fetch(capturedUrl);
+              const imgBlob = await imgResp.blob();
+
+              // Send to AI editing endpoint
+              const fd = new FormData();
+              fd.append('file', imgBlob, filename);
+              fd.append('style_path', stylePath);
+              if (pinInput.value) fd.append('pin', pinInput.value);
+
+              const editResp = await fetch('/edit', { method: 'POST', body: fd });
+              if (!editResp.ok) {
+                const err = await editResp.json().catch(() => ({ detail: 'Unknown error'}));
+                throw new Error(err.detail || 'AI editing failed');
+              }
+
+              const editData = await editResp.json();
+
+              // Show AI-edited result in preview
+              if (editData.files && editData.files.length > 0) {
+                previewEl.src = editData.files[0] + '?ts=' + Date.now();
+                statusEl.textContent = 'AI editing complete! Photo ready.';
+                appendResults(editData.files);
+              } else {
+                statusEl.textContent = 'AI editing completed but no results returned';
+              }
+            } catch (editErr) {
+              statusEl.textContent = 'AI editing error: ' + editErr.message;
+            }
           }
         }
       } catch (e) {
