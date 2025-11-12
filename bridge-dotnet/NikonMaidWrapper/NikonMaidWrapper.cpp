@@ -13,6 +13,11 @@ static LPMAIDEntryPointProc g_pMAIDEntryPoint = nullptr;
 static NkMAIDObject g_moduleObj{};
 static NkMAIDObject g_sourceObj{};
 
+// Forward declarations for capture callbacks and context
+struct CaptureContext;
+static NKERROR CALLPASCAL EventProc_Capture(NKREF refProc, ULONG ulEvent, NKPARAM data);
+extern CaptureContext g_captureCtx;
+
 static std::wstring FormatWin32Error(DWORD err)
 {
     LPWSTR buf = nullptr;
@@ -326,6 +331,38 @@ bool MaidBridge::EnumerateAndOpenCamera()
 
     pSourceObj = IntPtr(pSrc);
     Console::WriteLine("[MAID] Camera opened successfully");
+
+    // Set SaveMedia to SDRAM mode for tethered shooting (images go to buffer, not SD card)
+    Console::WriteLine("[MAID] Setting SaveMedia to SDRAM mode for tethered shooting...");
+    ULONG saveMedia = 1; // kNkMAIDSaveMedia_SDRAM = 1
+    result = g_pMAIDEntryPoint(pSrc, kNkMAIDCommand_CapSet, kNkMAIDCapability_SaveMedia,
+                      kNkMAIDDataType_Unsigned, (NKPARAM)&saveMedia, NULL, NULL);
+
+    // Log result but don't fail if not supported (some cameras may not support this)
+    if (result == kNkMAIDResult_NoError) {
+        Console::WriteLine("[MAID] SaveMedia set to SDRAM mode successfully");
+    } else if (result == -127) { // kNkMAIDResult_NotSupported
+        Console::WriteLine("[MAID] Warning: SaveMedia capability not supported on this camera");
+    } else {
+        Console::WriteLine(String::Format("[MAID] Warning: Failed to set SaveMedia (error {0}), will try anyway", result));
+    }
+
+    // Register EventProc callback to receive kNkMAIDEvent_AddChild notifications when image is captured
+    Console::WriteLine("[MAID] Registering EventProc callback for capture notifications...");
+    NkMAIDCallback eventProc;
+    eventProc.pProc = (LPNKFUNC)EventProc_Capture;
+    eventProc.refProc = (NKREF)&g_captureCtx;
+
+    result = g_pMAIDEntryPoint(pSrc, kNkMAIDCommand_CapSet, kNkMAIDCapability_EventProc,
+                      kNkMAIDDataType_CallbackPtr, (NKPARAM)&eventProc, NULL, NULL);
+
+    if (result == kNkMAIDResult_NoError) {
+        Console::WriteLine("[MAID] EventProc callback registered successfully");
+    } else if (result == -127) {
+        Console::WriteLine("[MAID] Warning: EventProc capability not supported");
+    } else {
+        Console::WriteLine(String::Format("[MAID] Warning: Failed to register EventProc (error {0})", result));
+    }
 
     return true;
 }
