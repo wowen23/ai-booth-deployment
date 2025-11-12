@@ -17,7 +17,7 @@ from genai_client import edit_with_gemini_image
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.json"
-STYLES_DIR = BASE_DIR / "styles"
+STYLES_DIR = BASE_DIR.parent / "styles" / "styles"
 STATIC_DIR = BASE_DIR / "static"
 
 load_dotenv()
@@ -76,7 +76,7 @@ def get_styles(category: str = "background"):
     for p in sorted(cat_dir.glob("*.txt")):
         items.append({
             "name": p.stem,
-            "path": str(p.relative_to(BASE_DIR)).replace("\\", "/"),
+            "path": str(p.relative_to(STYLES_DIR.parent)).replace("\\", "/"),
         })
     return {"category": category, "styles": items}
 
@@ -99,7 +99,7 @@ async def edit_image(
         if not pin or pin != app_pin:
             raise HTTPException(status_code=401, detail="Invalid PIN")
     # Read style prompt
-    style_abs = (BASE_DIR / style_path).resolve()
+    style_abs = (STYLES_DIR.parent / style_path).resolve()
     if not style_abs.exists() or not style_abs.is_file():
         raise HTTPException(status_code=400, detail="Invalid style_path")
     prompt_text = style_abs.read_text(encoding="utf-8").strip()
@@ -168,7 +168,7 @@ def create_prompt(p: PromptCreate):
         target.write_text(p.text.strip() + "\n", encoding="utf-8")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to write prompt: {e}")
-    rel = str(target.relative_to(BASE_DIR)).replace("\\", "/")
+    rel = str(target.relative_to(STYLES_DIR.parent)).replace("\\", "/")
     return {"ok": True, "path": rel}
 
 
