@@ -1,0 +1,16 @@
+{
+  "input_dir": "input",
+  "output_dir": "output",
+  "archive_dir": "archive",
+  "style_category": "retheme",
+  "style_file": "styles\\background\\80s.txt",
+  "model_priority": [
+    "imagen-3.0-generate-002",
+    "imagen-4.0-generate-001",
+    "gemini-2.5-flash-image"
+  ],
+  "num_images": 1,
+  "debounce_ms": 1000,
+  "editor_model": "gemini-2.5-flash-image",
+  "mode": "background"
+}

@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Booth Web</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 0; }
+    .tabs { display: flex; border-bottom: 2px solid #ddd; background: #f5f5f5; }
+    .tab { padding: 16px 24px; cursor: pointer; border: none; background: transparent; font-size: 16px; font-weight: 600; }
+    .tab.active { background: white; border-bottom: 3px solid #007bff; margin-bottom: -2px; }
+    .tab-content { display: none; padding: 24px; }
+    .tab-content.active { display: block; }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    label { font-weight: 600; }
+    button { padding: 8px 12px; cursor: pointer; }
+    #preview { max-width: 100%; margin-top: 12px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    .card img { width: 100%; height: auto; border-radius: 6px; }
+    .muted { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <div class="tabs">
+    <button class="tab active" data-tab="booth">AI Booth</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <!-- AI Booth Tab -->
+  <div id="booth" class="tab-content active">
+    <h1>AI Photo Booth</h1>
+
+    <div class="row">
+      <label for="category">Style Category</label>
+      <select id="category">
+        <option value="background">background</option>
+        <option value="retheme">retheme</option>
+      </select>
+
+      <label for="style">Style</label>
+      <select id="style"></select>
+    </div>
+
+    <div class="row" style="gap:8px; align-items:flex-start;">
+      <div>
+        <div class="muted">Popular (background)</div>
+        <div class="row" id="presets-bg" style="gap:8px;">
+          <button class="preset" data-category="background" data-style-path="styles/background/80s.txt">80s Neon</button>
+          <button class="preset" data-category="background" data-style-path="styles/background/wedding_brand.txt">Wedding Brand</button>
+          <button class="preset" data-category="background" data-style-path="styles/background/studio_pastel.txt">Studio Pastel</button>
+          <button class="preset" data-category="background" data-style-path="styles/background/midnight_city.txt">Midnight City</button>
+          <button class="preset" data-category="background" data-style-path="styles/background/retro_arcade.txt">Retro Arcade</button>
+        </div>
+      </div>
+      <div>
+        <div class="muted">Popular (retheme)</div>
+        <div class="row" id="presets-re" style="gap:8px;">
+          <button class="preset" data-category="retheme" data-style-path="styles/retheme/jurassic-park.txt">Jurassic Park</button>
+          <button class="preset" data-category="retheme" data-style-path="styles/retheme/corporate_branding.txt">Corporate Brand</button>
+          <button class="preset" data-category="retheme" data-style-path="styles/retheme/fantasy_royal.txt">Fantasy Royal</button>
+          <button class="preset" data-category="retheme" data-style-path="styles/retheme/vogue_editorial.txt">Vogue Editorial</button>
+          <button class="preset" data-category="retheme" data-style-path="styles/retheme/cyberpunk_street.txt">Cyberpunk</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="file">Photo</label>
+      <input id="file" type="file" accept="image/*" capture="environment" />
+      <button id="submit">Edit</button>
+    </div>
+
+    <div class="row">
+      <button id="startCam">Start Camera</button>
+      <button id="capture">Capture & Edit</button>
+    </div>
+
+    <video id="live" autoplay playsinline muted style="max-width:100%;border:1px solid #ddd;border-radius:8px"></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <img id="preview" alt="preview" />
+
+    <div id="status" class="muted"></div>
+
+    <h2>Results</h2>
+    <div id="results" class="gallery"></div>
+
+    <hr/>
+    <h2>SDK Live View (bridge)</h2>
+    <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="bridgeUrl">Bridge URL</label>
+        <input id="bridgeUrl" placeholder="http://localhost:9001" style="width:280px;" />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <div>
+          <button id="btnConnect">Connect Camera</button>
+          <button id="btnStartLive">Start Live View</button>
+          <button id="btnOpenLive">Open Stream</button>
+          <button id="btnStopLive">Stop</button>
+          <button id="btnShoot">Shoot</button>
+          <input type="text" id="startFileName" placeholder="e.g. WAO_9999" style="width:150px;margin-left:10px" />
+          <button id="btnRetry">Retry Download</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="width:100%;">
+      <img id="bridgeLive" alt="SDK Live View" style="max-width:100%;border:1px solid #ddd;border-radius:8px" />
+    </div>
+    <div class="muted" style="max-width:800px;">
+      Uses a local Windows bridge app (Nikon SDK). Live view shows via MJPEG. Shoot saves to your watch folder and is processed automatically.
+    </div>
+  </div>
+
+  <!-- Settings Tab -->
+  <div id="settings" class="tab-content">
+    <h1>Settings</h1>
+
+    <h2>Create a new prompt</h2>
+    <div class="row">
+      <label for="newCat">Category</label>
+      <select id="newCat">
+        <option value="background">background</option>
+        <option value="retheme">retheme</option>
+      </select>
+      <label for="newName">Name</label>
+      <input id="newName" placeholder="e.g. corporate_branding"/>
+    </div>
+    <div class="row" style="flex-direction:column; align-items:stretch; max-width:800px;">
+      <label for="newText">Prompt text</label>
+      <textarea id="newText" rows="6" style="width:100%;"></textarea>
+    </div>
+    <div class="row">
+      <button id="savePrompt">Save Prompt</button>
+    </div>
+
+    <hr/>
+    <h2>Watcher (admin)</h2>
+    <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="pinInput">PIN</label>
+        <input id="pinInput" placeholder="optional if APP_PIN unset" style="width:160px;" />
+      </div>
+      <div>
+        <label for="watchDir">Watch dir</label>
+        <input id="watchDir" placeholder="C:\\Photos\\Tether" style="width:280px;" />
+      </div>
+      <div>
+        <label for="watchStyle">Style path</label>
+        <input id="watchStyle" placeholder="(leave blank to use config.json)" style="width:320px;" />
+      </div>
+    </div>
+    <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="watchModel">Editor model</label>
+        <input id="watchModel" placeholder="gemini-2.5-flash-image" style="width:220px;" />
+      </div>
+      <div>
+        <label for="watchDebounce">Debounce (ms)</label>
+        <input id="watchDebounce" type="number" value="1000" style="width:120px;" />
+      </div>
+      <div>
+        <label for="watchArchive">Archive dir</label>
+        <input id="watchArchive" placeholder="C:\\Photos\\Archive" style="width:280px;" />
+      </div>
+    </div>
+    <div class="row" style="gap:8px;">
+      <button id="btnStartWatch">Start Watcher</button>
+      <button id="btnStopWatch">Stop Watcher</button>
+      <button id="btnStatus">Refresh Status</button>
+      <button id="btnLogs">Refresh Logs</button>
+    </div>
+    <pre id="watchStatus" class="muted" style="white-space:pre-wrap; max-height:160px; overflow:auto; background:#fafafa; padding:8px; border:1px solid #eee; border-radius:6px;"></pre>
+    <pre id="watchLogs" class="muted" style="white-space:pre-wrap; max-height:200px; overflow:auto; background:#fafafa; padding:8px; border:1px solid #eee; border-radius:6px;"></pre>
+  </div>
+
+  <script>
+    // Tab switching
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetTab = tab.dataset.tab;
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(targetTab).classList.add('active');
+      });
+    });
+
+    const categoryEl = document.getElementById('category');
+    const styleEl = document.getElementById('style');
+    const fileEl = document.getElementById('file');
+    const submitEl = document.getElementById('submit');
+    const previewEl = document.getElementById('preview');
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+    const startCamEl = document.getElementById('startCam');
+    const captureEl = document.getElementById('capture');
+    const liveEl = document.getElementById('live');
+    const canvasEl = document.getElementById('canvas');
+    const newCatEl = document.getElementById('newCat');
+    const newNameEl = document.getElementById('newName');
+    const newTextEl = document.getElementById('newText');
+    const savePromptEl = document.getElementById('savePrompt');
+    const presetButtons = Array.from(document.querySelectorAll('button.preset'));
+    // Watcher admin
+    const pinInput = document.getElementById('pinInput');
+    const watchDirEl = document.getElementById('watchDir');
+    const watchStyleEl = document.getElementById('watchStyle');
+    const watchModelEl = document.getElementById('watchModel');
+    const watchDebounceEl = document.getElementById('watchDebounce');
+    const watchArchiveEl = document.getElementById('watchArchive');
+    const btnStartWatch = document.getElementById('btnStartWatch');
+    const btnStopWatch = document.getElementById('btnStopWatch');
+    const btnStatus = document.getElementById('btnStatus');
+    const btnLogs = document.getElementById('btnLogs');
+    const watchStatus = document.getElementById('watchStatus');
+    const watchLogs = document.getElementById('watchLogs');
+    // SDK bridge UI
+    const bridgeUrlEl = document.getElementById('bridgeUrl');
+    const btnOpenLive = document.getElementById('btnOpenLive');
+    const btnStopLive = document.getElementById('btnStopLive');
+    const btnShoot = document.getElementById('btnShoot');
+    const btnRetry = document.getElementById('btnRetry');
+    const bridgeLiveEl = document.getElementById('bridgeLive');
+
+    // Prefill watcher fields from config.json
+    try {
+      fetch('/config').then(r => r.json()).then(cfg => {
+        if (cfg && typeof cfg === 'object') {
+          if (!watchDirEl.value && cfg.input_dir) watchDirEl.value = cfg.input_dir;
+          if (!watchStyleEl.value && cfg.style_file) watchStyleEl.value = '';
+          if (!watchModelEl.value && cfg.editor_model) watchModelEl.value = cfg.editor_model;
+        }
+      }).catch(() => {});
+    } catch {}
+
+    async function loadStyles() {
+      const cat = categoryEl.value;
+      statusEl.textContent = 'Loading styles...';
+      try {
+        const res = await fetch(`/styles?category=${encodeURIComponent(cat)}`);
+        const data = await res.json();
+        styleEl.innerHTML = '';
+        for (const s of data.styles) {
+          const opt = document.createElement('option');
+          opt.value = s.path; // relative path
+          opt.textContent = s.name;
+          styleEl.appendChild(opt);
+        }
+        statusEl.textContent = '';
+      } catch (e) {
+        statusEl.textContent = 'Failed to load styles';
+      }
+    }
+
+    async function selectPreset(category, stylePath) {
+      // Switch category, reload styles, then select the style if present
+      categoryEl.value = category;
+      await loadStyles();
+      const idx = Array.from(styleEl.options).findIndex(o => o.value === stylePath);
+      if (idx >= 0) {
+        styleEl.selectedIndex = idx;
+        statusEl.textContent = `Preset selected: ${styleEl.options[idx].text}`;
+      } else {
+        statusEl.textContent = `Preset style not found in ${category}. You can create it in Settings.`;
+      }
+    }
+
+    categoryEl.addEventListener('change', loadStyles);
+
+    // Preset handlers
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const category = btn.getAttribute('data-category');
+        const path = btn.getAttribute('data-style-path');
+        await selectPreset(category, path);
+      });
+    });
+
+    // Watcher helpers
+    async function refreshStatus() {
+      try {
+        const q = pinInput.value ? `?pin=${encodeURIComponent(pinInput.value)}` : '';
+        const res = await fetch(`/watcher/status${q}`);
+        if (!res.ok) throw new Error('status failed');
+        const data = await res.json();
+        watchStatus.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        watchStatus.textContent = 'Error loading status';
+      }
+    }
+    async function refreshLogs() {
+      try {
+        const q = pinInput.value ? `?limit=200&pin=${encodeURIComponent(pinInput.value)}` : '?limit=200';
+        const res = await fetch(`/watcher/logs${q}`);
+        if (!res.ok) throw new Error('logs failed');
+        const data = await res.json();
+        watchLogs.textContent = (data.lines || []).join('\n');
+      } catch (e) {
+        watchLogs.textContent = 'Error loading logs';
+      }
+    }
+
+    btnStatus.addEventListener('click', refreshStatus);
+    btnLogs.addEventListener('click', refreshLogs);
+    btnStartWatch.addEventListener('click', async () => {
+      const body = {
+        watch_dir: watchDirEl.value,
+        watch_style_path: (watchStyleEl.value || undefined),
+        editor_model: watchModelEl.value || undefined,
+        debounce_ms: parseInt(watchDebounceEl.value || '1000', 10),
+        archive_dir: watchArchiveEl.value || undefined,
+        pin: pinInput.value || undefined,
+      };
+      try {
+        const res = await fetch('/watcher/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'start failed');
+        }
+        await refreshStatus();
+        await refreshLogs();
+        statusEl.textContent = 'Watcher started';
+      } catch (e) {
+        statusEl.textContent = 'Start failed: ' + e.message;
+      }
+    });
+    btnStopWatch.addEventListener('click', async () => {
+      const body = { pin: pinInput.value || undefined };
+      try {
+        const res = await fetch('/watcher/stop', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'stop failed');
+        }
+        await refreshStatus();
+        await refreshLogs();
+        statusEl.textContent = 'Watcher stopped';
+      } catch (e) {
+        statusEl.textContent = 'Stop failed: ' + e.message;
+      }
+    });
+
+    // Webcam helpers (1080p preferred)
+    let currentStream = null;
+    async function startCamera() {
+      // Stop any existing stream first
+      try {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+        }
+      } catch {}
+      statusEl.textContent = 'Requesting camera (1080p preferred)...';
+      const constraints = {
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      };
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        liveEl.srcObject = stream;
+        await liveEl.play();
+        statusEl.textContent = 'Camera started';
+      } catch (e) {
+        statusEl.textContent = 'Camera error: ' + (e && e.message ? e.message : 'failed to start');
+      }
+    }
+
+    startCamEl.addEventListener('click', startCamera);
+
+    // SDK bridge handlers
+    // SDK Camera Control
+    const btnConnect = document.getElementById('btnConnect');
+    const btnStartLive = document.getElementById('btnStartLive');
+
+    btnConnect.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Connecting to camera...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const resp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!resp.ok) throw new Error('Connect failed');
+        statusEl.textContent = 'Camera connected!';
+      } catch (e) {
+        statusEl.textContent = 'Connect error: ' + e.message;
+      }
+    });
+
+    btnStartLive.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Starting live view...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+        statusEl.textContent = 'Live view started! Click "Open Stream" to view.';
+      } catch (e) {
+        statusEl.textContent = 'Start live error: ' + e.message;
+      }
+    });
+
+    btnOpenLive.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Starting live view...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+        // First start live view
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+
+        // Then open the stream
+        const url = bridge + '/live.mjpg?ts=' + Date.now();
+        bridgeLiveEl.src = url;
+        statusEl.textContent = 'MJPEG stream opened';
+      } catch (e) {
+        statusEl.textContent = 'Open stream error: ' + e.message;
+      }
+    });
+
+    btnStopLive.addEventListener('click', async () => {
+      bridgeLiveEl.src = '';
+      try {
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        await fetch(bridge + '/sdk/stop-live', { method: 'POST' });
+      } catch (e) {
+        // Ignore errors
+      }
+      statusEl.textContent = 'Live view stopped';
+    });
+    btnShoot.addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/sdk/shoot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinInput.value || undefined, bridge_url: bridgeUrlEl.value || undefined })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'shoot failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = data.message || 'Shoot triggered';
+        // If bridge returns saved filenames, we could show them here later
+      } catch (e) {
+        statusEl.textContent = 'Shoot error: ' + e.message;
+      }
+    });
+
+    btnRetry.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Retrying MTP download...';
+        const bridgeUrl = bridgeUrlEl.value || 'http://localhost:9001';
+        const startFileNameEl = document.getElementById('startFileName');
+        const startFileName = startFileNameEl.value.trim();
+
+        let url = bridgeUrl + '/retry-copy';
+        if (startFileName) {
+          url += '?startFileName=' + encodeURIComponent(startFileName);
+        }
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'retry failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = data.message || 'Retry complete';
+      } catch (e) {
+        statusEl.textContent = 'Retry error: ' + e.message;
+      }
+    });
+
+    fileEl.addEventListener('change', () => {
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) { previewEl.src = ''; return; }
+      const url = URL.createObjectURL(file);
+      previewEl.src = url;
+    });
+
+    function appendResults(urls) {
+      for (const url of urls) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'result';
+        const link = document.createElement('a');
+        link.href = url; link.textContent = 'Open'; link.target = '_blank';
+        card.appendChild(img);
+        card.appendChild(link);
+        resultsEl.prepend(card);
+      }
+    }
+
+    submitEl.addEventListener('click', async () => {
+      const file = fileEl.files && fileEl.files[0];
+      const stylePath = styleEl.value;
+      if (!file || !stylePath) {
+        statusEl.textContent = 'Select a style and an image first.';
+        return;
+      }
+      statusEl.textContent = 'Uploading and editing...';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('style_path', stylePath);
+      if (pinInput.value) fd.append('pin', pinInput.value);
+      // editor_model can be customized later; default on server is gemini-2.5-flash-image
+
+      try {
+        const resp = await fetch('/edit', { method: 'POST', body: fd });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'Failed');
+        }
+        const data = await resp.json();
+        statusEl.textContent = 'Done!';
+        appendResults(data.files);
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+      }
+    });
+
+    // Live camera controls
+    let liveStream;
+    startCamEl.addEventListener('click', async () => {
+      statusEl.textContent = 'Requesting camera...';
+      try {
+        try {
+          liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
+        } catch {
+          liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        }
+        liveEl.srcObject = liveStream;
+        statusEl.textContent = 'Camera started';
+      } catch (e) {
+        statusEl.textContent = 'Camera access denied: ' + e.message;
+      }
+    });
+
+    captureEl.addEventListener('click', async () => {
+      if (!liveEl.srcObject) { statusEl.textContent = 'Start camera first'; return; }
+      const stylePath = styleEl.value;
+      if (!stylePath) { statusEl.textContent = 'Select a style first.'; return; }
+      const vw = liveEl.videoWidth, vh = liveEl.videoHeight;
+      if (!vw || !vh) { statusEl.textContent = 'Camera not ready yet'; return; }
+      canvasEl.width = vw; canvasEl.height = vh;
+      const ctx = canvasEl.getContext('2d');
+      ctx.drawImage(liveEl, 0, 0, vw, vh);
+      statusEl.textContent = 'Capturing...';
+      canvasEl.toBlob(async (blob) => {
+        if (!blob) { statusEl.textContent = 'Capture failed'; return; }
+        const fd = new FormData();
+        fd.append('file', blob, 'capture.jpg');
+        fd.append('style_path', stylePath);
+        if (pinInput.value) fd.append('pin', pinInput.value);
+        statusEl.textContent = 'Uploading and editing...';
+        try {
+          const resp = await fetch('/edit', { method: 'POST', body: fd });
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+            throw new Error(err.detail || 'Failed');
+          }
+          const data = await resp.json();
+          statusEl.textContent = 'Done!';
+          appendResults(data.files);
+        } catch (e) {
+          statusEl.textContent = 'Error: ' + e.message;
+        }
+      }, 'image/jpeg', 0.95);
+    });
+
+    // init
+    loadStyles();
+
+    // Save prompt
+    savePromptEl.addEventListener('click', async () => {
+      const name = (newNameEl.value || '').trim();
+      const category = newCatEl.value;
+      const text = (newTextEl.value || '').trim();
+      if (!name || !text) { statusEl.textContent = 'Enter a name and prompt text.'; return; }
+      statusEl.textContent = 'Saving prompt...';
+      try {
+        const resp = await fetch('/prompts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, category, text, pin: pinInput.value || undefined })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(err.detail || 'Failed');
+        }
+        await loadStyles();
+        statusEl.textContent = 'Saved. New style added.';
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+      }
+    });
+  </script>
+</body>
+</html>

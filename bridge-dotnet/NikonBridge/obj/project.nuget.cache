@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "U3esD7daXH8=",
+  "dgSpecHash": "4JfMcxnm8ss=",
   "success": true,
-  "projectFilePath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+  "projectFilePath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\willi\\.nuget\\packages\\dotnetenv\\3.1.1\\dotnetenv.3.1.1.nupkg.sha512",
     "C:\\Users\\willi\\.nuget\\packages\\microsoft.extensions.configuration\\1.1.2\\microsoft.extensions.configuration.1.1.2.nupkg.sha512",
@@ -91,9 +91,9 @@
       "code": "NU1903",
       "level": "Warning",
       "message": "Package 'SixLabors.ImageSharp' 3.1.4 has a known high severity vulnerability, https://github.com/advisories/GHSA-2cmq-823j-5qj8",
-      "projectPath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "projectPath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "filePath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "libraryId": "SixLabors.ImageSharp",
       "targetGraphs": [
         "net8.0"
@@ -103,9 +103,9 @@
       "code": "NU1903",
       "level": "Warning",
       "message": "Package 'SixLabors.ImageSharp' 3.1.4 has a known high severity vulnerability, https://github.com/advisories/GHSA-63p8-c4ww-9cg7",
-      "projectPath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "projectPath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "filePath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "libraryId": "SixLabors.ImageSharp",
       "targetGraphs": [
         "net8.0"
@@ -115,9 +115,9 @@
       "code": "NU1902",
       "level": "Warning",
       "message": "Package 'SixLabors.ImageSharp' 3.1.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-qxrv-gp6x-rc23",
-      "projectPath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "projectPath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "filePath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "libraryId": "SixLabors.ImageSharp",
       "targetGraphs": [
         "net8.0"
@@ -127,9 +127,9 @@
       "code": "NU1902",
       "level": "Warning",
       "message": "Package 'SixLabors.ImageSharp' 3.1.4 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-rxmq-m78w-7wmc",
-      "projectPath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "projectPath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
+      "filePath": "C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.csproj",
       "libraryId": "SixLabors.ImageSharp",
       "targetGraphs": [
         "net8.0"
