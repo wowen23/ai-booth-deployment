@@ -408,7 +408,16 @@
         }
         const data = await resp.json();
         statusEl.textContent = data.message || 'Shoot triggered';
-        // If bridge returns saved filenames, we could show them here later
+
+        // Show captured image in preview
+        if (data.files && data.files.length > 0) {
+          const filePath = data.files[0];
+          // Extract just the filename from the full path (handles both / and \ separators)
+          const filename = filePath.split(/[/\\]/).pop();
+          if (filename) {
+            previewEl.src = '/inputs/' + filename + '?ts=' + Date.now();
+          }
+        }
       } catch (e) {
         statusEl.textContent = 'Shoot error: ' + e.message;
       }
@@ -436,6 +445,16 @@
         }
         const data = await resp.json();
         statusEl.textContent = data.message || 'Retry complete';
+
+        // Show captured image in preview
+        if (data.files && data.files.length > 0) {
+          const filePath = data.files[0];
+          // Extract just the filename from the full path (handles both / and \ separators)
+          const filename = filePath.split(/[/\\]/).pop();
+          if (filename) {
+            previewEl.src = '/inputs/' + filename + '?ts=' + Date.now();
+          }
+        }
       } catch (e) {
         statusEl.textContent = 'Retry error: ' + e.message;
       }

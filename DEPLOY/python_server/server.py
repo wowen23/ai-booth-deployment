@@ -172,13 +172,17 @@ def create_prompt(p: PromptCreate):
     return {"ok": True, "path": rel}
 
 
-# Mount static for outputs and the static UI
+# Mount static for outputs, input, and the static UI
 cfg = load_config()
 OUTPUT_DIR = (BASE_DIR / cfg.get("output_dir", "output")).resolve()
+# Input directory for camera captures - use camera_bridge/output where bridge saves photos
+CAMERA_OUTPUT_DIR = (BASE_DIR.parent / "camera_bridge" / "output").resolve()
 ensure_dir(OUTPUT_DIR)
+ensure_dir(CAMERA_OUTPUT_DIR)
 ensure_dir(STATIC_DIR)
 
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+app.mount("/inputs", StaticFiles(directory=str(CAMERA_OUTPUT_DIR)), name="inputs")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

@@ -172,13 +172,23 @@ def create_prompt(p: PromptCreate):
     return {"ok": True, "path": rel}
 
 
-# Mount static for outputs and the static UI
+# Mount static for outputs, input, and the static UI
 cfg = load_config()
 OUTPUT_DIR = (BASE_DIR / cfg.get("output_dir", "output")).resolve()
+# Input directory for camera captures - check for DEPLOY/camera_bridge/output or bridge-dotnet output
+CAMERA_OUTPUT_DIR = None
+if (BASE_DIR.parent / "DEPLOY" / "camera_bridge" / "output").exists():
+    CAMERA_OUTPUT_DIR = (BASE_DIR.parent / "DEPLOY" / "camera_bridge" / "output").resolve()
+elif (BASE_DIR / "bridge-dotnet" / "NikonBridge" / "bin" / "Debug" / "net8.0" / "output").exists():
+    CAMERA_OUTPUT_DIR = (BASE_DIR / "bridge-dotnet" / "NikonBridge" / "bin" / "Debug" / "net8.0" / "output").resolve()
+else:
+    CAMERA_OUTPUT_DIR = (BASE_DIR / cfg.get("input_dir", "input")).resolve()
 ensure_dir(OUTPUT_DIR)
+ensure_dir(CAMERA_OUTPUT_DIR)
 ensure_dir(STATIC_DIR)
 
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+app.mount("/inputs", StaticFiles(directory=str(CAMERA_OUTPUT_DIR)), name="inputs")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
