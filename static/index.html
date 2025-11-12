@@ -42,27 +42,8 @@
       <select id="style"></select>
     </div>
 
-    <div class="row" style="gap:8px; align-items:flex-start;">
-      <div>
-        <div class="muted">Popular (background)</div>
-        <div class="row" id="presets-bg" style="gap:8px;">
-          <button class="preset" data-category="background" data-style-path="styles/background/80s.txt">80s Neon</button>
-          <button class="preset" data-category="background" data-style-path="styles/background/wedding_brand.txt">Wedding Brand</button>
-          <button class="preset" data-category="background" data-style-path="styles/background/studio_pastel.txt">Studio Pastel</button>
-          <button class="preset" data-category="background" data-style-path="styles/background/midnight_city.txt">Midnight City</button>
-          <button class="preset" data-category="background" data-style-path="styles/background/retro_arcade.txt">Retro Arcade</button>
-        </div>
-      </div>
-      <div>
-        <div class="muted">Popular (retheme)</div>
-        <div class="row" id="presets-re" style="gap:8px;">
-          <button class="preset" data-category="retheme" data-style-path="styles/retheme/jurassic-park.txt">Jurassic Park</button>
-          <button class="preset" data-category="retheme" data-style-path="styles/retheme/corporate_branding.txt">Corporate Brand</button>
-          <button class="preset" data-category="retheme" data-style-path="styles/retheme/fantasy_royal.txt">Fantasy Royal</button>
-          <button class="preset" data-category="retheme" data-style-path="styles/retheme/vogue_editorial.txt">Vogue Editorial</button>
-          <button class="preset" data-category="retheme" data-style-path="styles/retheme/cyberpunk_street.txt">Cyberpunk</button>
-        </div>
-      </div>
+    <div class="row" style="margin-top:20px;">
+      <button id="btnBoothShoot" style="background:#28a745;color:white;font-size:24px;font-weight:bold;padding:20px 60px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.2);">SHOOT</button>
     </div>
 
     <div class="row">
@@ -194,7 +175,6 @@
     const newNameEl = document.getElementById('newName');
     const newTextEl = document.getElementById('newText');
     const savePromptEl = document.getElementById('savePrompt');
-    const presetButtons = Array.from(document.querySelectorAll('button.preset'));
     // Watcher admin
     const pinInput = document.getElementById('pinInput');
     const watchDirEl = document.getElementById('watchDir');
@@ -246,29 +226,67 @@
       }
     }
 
-    async function selectPreset(category, stylePath) {
-      // Switch category, reload styles, then select the style if present
-      categoryEl.value = category;
-      await loadStyles();
-      const idx = Array.from(styleEl.options).findIndex(o => o.value === stylePath);
-      if (idx >= 0) {
-        styleEl.selectedIndex = idx;
-        statusEl.textContent = `Preset selected: ${styleEl.options[idx].text}`;
-      } else {
-        statusEl.textContent = `Preset style not found in ${category}. You can create it in Settings.`;
+    categoryEl.addEventListener('change', loadStyles);
+
+    // Booth Shoot button with countdown
+    const btnBoothShoot = document.getElementById('btnBoothShoot');
+    let isCountingDown = false;
+
+    async function countdownShoot() {
+      if (isCountingDown) return; // Prevent multiple clicks during countdown
+
+      isCountingDown = true;
+      const originalText = btnBoothShoot.textContent;
+
+      // Countdown from 3 to 1
+      for (let i = 3; i >= 1; i--) {
+        btnBoothShoot.textContent = i.toString();
+        statusEl.textContent = `Get ready... ${i}`;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      btnBoothShoot.textContent = 'CAPTURING...';
+      statusEl.textContent = 'Capturing photo...';
+
+      // Trigger the SDK shoot
+      try {
+        const bridgeUrlEl = document.getElementById('bridgeUrl');
+        const pinInput = document.getElementById('pinInput');
+
+        const resp = await fetch('/sdk/shoot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pin: pinInput.value || undefined,
+            bridge_url: bridgeUrlEl.value || undefined
+          })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'shoot failed');
+        }
+
+        const data = await resp.json();
+        statusEl.textContent = data.message || 'Photo captured!';
+
+        // Show captured image in preview
+        if (data.files && data.files.length > 0) {
+          const filePath = data.files[0];
+          const filename = filePath.split(/[/\\]/).pop();
+          if (filename) {
+            previewEl.src = '/inputs/' + filename + '?ts=' + Date.now();
+          }
+        }
+      } catch (e) {
+        statusEl.textContent = 'Shoot error: ' + e.message;
+      } finally {
+        btnBoothShoot.textContent = originalText;
+        isCountingDown = false;
       }
     }
 
-    categoryEl.addEventListener('change', loadStyles);
-
-    // Preset handlers
-    presetButtons.forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const category = btn.getAttribute('data-category');
-        const path = btn.getAttribute('data-style-path');
-        await selectPreset(category, path);
-      });
-    });
+    btnBoothShoot.addEventListener('click', countdownShoot);
 
     // Watcher helpers
     async function refreshStatus() {
