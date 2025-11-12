@@ -10,8 +10,8 @@
         "dependencies": {
           "DotNetEnv": "3.1.1",
           "Microsoft.Extensions.Configuration.Binder": "8.0.2",
-          "NikonMaidWrapper": "1.0.0",
-          "SixLabors.ImageSharp": "3.1.4"
+          "SixLabors.ImageSharp": "3.1.4",
+          "NikonMaidWrapper": "0.0.0.0"
         },
         "runtime": {
           "NikonBridge.dll": {}
@@ -751,7 +751,7 @@
           "System.Xml.ReaderWriter": "4.3.0"
         }
       },
-      "NikonMaidWrapper/1.0.0": {
+      "NikonMaidWrapper/0.0.0.0": {
         "runtime": {
           "NikonMaidWrapper.dll": {
             "assemblyVersion": "0.0.0.0",
@@ -1334,8 +1334,8 @@
       "path": "system.xml.xdocument/4.3.0",
       "hashPath": "system.xml.xdocument.4.3.0.nupkg.sha512"
     },
-    "NikonMaidWrapper/1.0.0": {
-      "type": "project",
+    "NikonMaidWrapper/0.0.0.0": {
+      "type": "reference",
       "serviceable": false,
       "sha512": ""
     }
