@@ -71,14 +71,6 @@
       <button id="submit">Edit</button>
     </div>
 
-    <div class="row">
-      <button id="startCam">Start Camera</button>
-      <button id="capture">Capture & Edit</button>
-    </div>
-
-    <video id="live" autoplay playsinline muted style="max-width:100%;border:1px solid #ddd;border-radius:8px"></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-
     <img id="preview" alt="preview" />
 
     <div id="status" class="muted"></div>
@@ -198,10 +190,6 @@
     const previewEl = document.getElementById('preview');
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
-    const startCamEl = document.getElementById('startCam');
-    const captureEl = document.getElementById('capture');
-    const liveEl = document.getElementById('live');
-    const canvasEl = document.getElementById('canvas');
     const newCatEl = document.getElementById('newCat');
     const newNameEl = document.getElementById('newName');
     const newTextEl = document.getElementById('newText');
@@ -349,38 +337,6 @@
         statusEl.textContent = 'Stop failed: ' + e.message;
       }
     });
-
-    // Webcam helpers (1080p preferred)
-    let currentStream = null;
-    async function startCamera() {
-      // Stop any existing stream first
-      try {
-        if (currentStream) {
-          currentStream.getTracks().forEach(t => t.stop());
-          currentStream = null;
-        }
-      } catch {}
-      statusEl.textContent = 'Requesting camera (1080p preferred)...';
-      const constraints = {
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 }
-        },
-        audio: false
-      };
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        currentStream = stream;
-        liveEl.srcObject = stream;
-        await liveEl.play();
-        statusEl.textContent = 'Camera started';
-      } catch (e) {
-        statusEl.textContent = 'Camera error: ' + (e && e.message ? e.message : 'failed to start');
-      }
-    }
-
-    startCamEl.addEventListener('click', startCamera);
 
     // SDK bridge handlers
     // SDK Camera Control
@@ -533,55 +489,6 @@
       } catch (e) {
         statusEl.textContent = 'Error: ' + e.message;
       }
-    });
-
-    // Live camera controls
-    let liveStream;
-    startCamEl.addEventListener('click', async () => {
-      statusEl.textContent = 'Requesting camera...';
-      try {
-        try {
-          liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
-        } catch {
-          liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        }
-        liveEl.srcObject = liveStream;
-        statusEl.textContent = 'Camera started';
-      } catch (e) {
-        statusEl.textContent = 'Camera access denied: ' + e.message;
-      }
-    });
-
-    captureEl.addEventListener('click', async () => {
-      if (!liveEl.srcObject) { statusEl.textContent = 'Start camera first'; return; }
-      const stylePath = styleEl.value;
-      if (!stylePath) { statusEl.textContent = 'Select a style first.'; return; }
-      const vw = liveEl.videoWidth, vh = liveEl.videoHeight;
-      if (!vw || !vh) { statusEl.textContent = 'Camera not ready yet'; return; }
-      canvasEl.width = vw; canvasEl.height = vh;
-      const ctx = canvasEl.getContext('2d');
-      ctx.drawImage(liveEl, 0, 0, vw, vh);
-      statusEl.textContent = 'Capturing...';
-      canvasEl.toBlob(async (blob) => {
-        if (!blob) { statusEl.textContent = 'Capture failed'; return; }
-        const fd = new FormData();
-        fd.append('file', blob, 'capture.jpg');
-        fd.append('style_path', stylePath);
-        if (pinInput.value) fd.append('pin', pinInput.value);
-        statusEl.textContent = 'Uploading and editing...';
-        try {
-          const resp = await fetch('/edit', { method: 'POST', body: fd });
-          if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
-            throw new Error(err.detail || 'Failed');
-          }
-          const data = await resp.json();
-          statusEl.textContent = 'Done!';
-          appendResults(data.files);
-        } catch (e) {
-          statusEl.textContent = 'Error: ' + e.message;
-        }
-      }, 'image/jpeg', 0.95);
     });
 
     // init
