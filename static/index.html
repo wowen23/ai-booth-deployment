@@ -131,6 +131,12 @@
     <div class="row" style="justify-content:center; margin-bottom:10px;">
       <button id="btnUserLiveView" style="background:linear-gradient(135deg, #28a745 0%, #20c997 100%);color:white;font-size:32px;font-weight:bold;padding:30px 80px;border:none;border-radius:16px;cursor:pointer;box-shadow:0 6px 20px rgba(40,167,69,0.4);transition:transform 0.2s;">START LIVE VIEW</button>
     </div>
+
+    <!-- Live View Display -->
+    <div id="userLiveContainer" style="display:none; text-align:center; margin-bottom:20px;">
+      <img id="userLiveStream" alt="Live View" style="max-width:100%; max-height:400px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.2); border:3px solid #28a745;" />
+    </div>
+
     <h1 style="text-align:center; color:#667eea;">AI Photo Booth</h1>
 
     <div class="row" style="justify-content:center;">
@@ -873,14 +879,32 @@
     const userResultsEl = document.getElementById('userResults');
     const btnUserShoot = document.getElementById('btnUserShoot');
     const btnUserLiveView = document.getElementById('btnUserLiveView');
+    const userLiveContainer = document.getElementById('userLiveContainer');
+    const userLiveStream = document.getElementById('userLiveStream');
 
     let isUserCountingDown = false;
+    let isUserLiveViewOn = false;
 
     // User Live View button
     btnUserLiveView.addEventListener('click', async () => {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+      // Toggle off if already on
+      if (isUserLiveViewOn) {
+        try {
+          await fetch(bridge + '/sdk/stop-live', { method: 'POST' });
+        } catch (e) {}
+        userLiveStream.src = '';
+        userLiveContainer.style.display = 'none';
+        btnUserLiveView.textContent = 'START LIVE VIEW';
+        btnUserLiveView.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        isUserLiveViewOn = false;
+        userStatusEl.textContent = '';
+        return;
+      }
+
       try {
         btnUserLiveView.textContent = 'CONNECTING...';
-        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
 
         // First connect camera
         const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
@@ -890,11 +914,17 @@
         const liveResp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
         if (!liveResp.ok) throw new Error('Start live failed');
 
-        btnUserLiveView.textContent = 'LIVE VIEW ON';
-        btnUserLiveView.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
+        // Show the live stream
+        userLiveStream.src = bridge + '/live.mjpg?ts=' + Date.now();
+        userLiveContainer.style.display = 'block';
+
+        btnUserLiveView.textContent = 'STOP LIVE VIEW';
+        btnUserLiveView.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+        isUserLiveViewOn = true;
         userStatusEl.textContent = 'Camera ready! Hit SHOOT when ready.';
       } catch (e) {
         btnUserLiveView.textContent = 'START LIVE VIEW';
+        btnUserLiveView.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
         userStatusEl.textContent = 'Error: ' + e.message;
       }
     });
