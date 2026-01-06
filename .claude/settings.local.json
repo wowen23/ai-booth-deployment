@@ -21,7 +21,14 @@
       "Bash(pdftotext:*)",
       "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64 /v:minimal)",
       "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Debug /p:Platform=x64)",
-      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonMaidWrapper.vcxproj /p:Configuration=Debug /p:Platform=x64)"
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonMaidWrapper.vcxproj /p:Configuration=Debug /p:Platform=x64)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRemove webcam capture controls from AI Booth UI\n\nRemoved browser-based webcam capture functionality (Start Camera and Capture & Edit buttons) from the AI Booth section since all camera operations now go through the SDK Live View section. This simplifies the UI and provides a clearer workflow focused on the Nikon camera integration.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonBridge.sln /p:Configuration=Release /p:Platform=x64)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/MSBuild.exe\" NikonBridge.sln //p:Configuration=Release //p:Platform=x64)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Release /p:Platform=x64)"
     ],
     "deny": [],
     "ask": []
