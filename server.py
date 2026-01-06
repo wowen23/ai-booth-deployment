@@ -14,11 +14,14 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from genai_client import edit_with_gemini_image
+from qr_generator import generate_photo_qr, get_qr_code_base64
+from email_sender import send_photo_email, validate_email
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.json"
 STYLES_DIR = BASE_DIR / "styles"
 STATIC_DIR = BASE_DIR / "static"
+GALLERY_DB = BASE_DIR / "galleries.json"
 
 load_dotenv()
 
@@ -84,6 +87,8 @@ def get_styles(category: str = "background"):
 class EditResponse(BaseModel):
     id: str
     files: List[str]
+    qr_code_url: str = ""
+    gallery_url: str = ""
 
 
 @app.post("/edit", response_model=EditResponse)
@@ -135,7 +140,19 @@ async def edit_image(
         # Static mount at /outputs
         saved_urls.append(f"/outputs/{out_name}")
 
-    return EditResponse(id=job_id, files=saved_urls)
+    # Generate QR code for gallery
+    base_url = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    qr_data = generate_photo_qr(job_id, base_url, str(output_dir))
+
+    # Save gallery metadata
+    _save_gallery_metadata(job_id, saved_urls[0] if saved_urls else "", ts)
+
+    return EditResponse(
+        id=job_id,
+        files=saved_urls,
+        qr_code_url=qr_data["qr_code_url"],
+        gallery_url=qr_data["gallery_url"]
+    )
 
 
 class PromptCreate(BaseModel):
@@ -488,6 +505,109 @@ def get_config():
         return load_config()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load config: {e}")
+
+
+# ------------------------------
+# Gallery endpoints for QR code delivery
+# ------------------------------
+def _save_gallery_metadata(photo_id: str, image_url: str, timestamp: str):
+    """Save gallery metadata to JSON file"""
+    galleries = {}
+    if GALLERY_DB.exists():
+        try:
+            galleries = json.loads(GALLERY_DB.read_text())
+        except:
+            galleries = {}
+
+    galleries[photo_id] = {
+        "image_url": image_url,
+        "timestamp": timestamp,
+        "created": time.time()
+    }
+
+    GALLERY_DB.write_text(json.dumps(galleries, indent=2))
+
+
+def _get_gallery_metadata(photo_id: str):
+    """Retrieve gallery metadata"""
+    if not GALLERY_DB.exists():
+        return None
+
+    try:
+        galleries = json.loads(GALLERY_DB.read_text())
+        return galleries.get(photo_id)
+    except:
+        return None
+
+
+@app.get("/gallery/{photo_id}")
+def gallery_page(photo_id: str):
+    """Serve gallery HTML page for QR code scans"""
+    gallery_html = STATIC_DIR / "gallery.html"
+    if not gallery_html.exists():
+        raise HTTPException(status_code=404, detail="Gallery page not found")
+    return FileResponse(gallery_html)
+
+
+@app.get("/api/gallery/{photo_id}")
+def gallery_data(photo_id: str):
+    """API endpoint to get gallery photo data"""
+    metadata = _get_gallery_metadata(photo_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+
+    return {
+        "image_url": metadata["image_url"],
+        "timestamp": metadata["timestamp"],
+        "photo_id": photo_id
+    }
+
+
+class SendEmailRequest(BaseModel):
+    email: str
+    photo_id: str
+
+
+@app.post("/send-email")
+async def send_email(req: SendEmailRequest):
+    """
+    Send AI-enhanced photo to guest via email
+    """
+    # Validate email
+    if not validate_email(req.email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
+    # Get photo metadata
+    metadata = _get_gallery_metadata(req.photo_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    # Build paths
+    image_url = metadata["image_url"]
+    # Convert URL to file path (e.g., /outputs/result_123.jpg -> output/result_123.jpg)
+    if image_url.startswith("/outputs/"):
+        filename = image_url.replace("/outputs/", "")
+        image_path = str(BASE_DIR / "output" / filename)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    # Build gallery URL
+    base_url = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    gallery_url = f"{base_url}/gallery/{req.photo_id}"
+
+    # Send email
+    result = send_photo_email(req.email, req.photo_id, image_path, gallery_url)
+
+    if result["success"]:
+        return {
+            "success": True,
+            "message": result["message"]
+        }
+    else:
+        raise HTTPException(status_code=500, detail=result["error"])
 
 
 # ------------------------------

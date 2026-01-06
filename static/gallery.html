@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your AI Photo - AI Booth</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 800px;
+      width: 100%;
+      padding: 40px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 1.1em;
+    }
+
+    .photo-container {
+      margin: 30px 0;
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .photo-container img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 30px;
+    }
+
+    button, .button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 1.1em;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover, .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active, .button:active {
+      transform: translateY(0);
+    }
+
+    .share-section {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 2px solid #eee;
+    }
+
+    .share-section h2 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+
+    .share-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .share-btn {
+      padding: 10px 20px;
+      font-size: 0.95em;
+      background: #fff;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .share-btn:hover {
+      background: #667eea;
+      color: white;
+    }
+
+    .footer {
+      margin-top: 40px;
+      color: #999;
+      font-size: 0.9em;
+    }
+
+    .loading {
+      font-size: 1.2em;
+      color: #667eea;
+      padding: 40px;
+    }
+
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 1.8em;
+      }
+
+      .buttons {
+        flex-direction: column;
+      }
+
+      button, .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>✨ Your AI Photo ✨</h1>
+    <p class="subtitle">Created with AI magic at the photo booth</p>
+
+    <div id="content">
+      <div class="loading">Loading your photo...</div>
+    </div>
+  </div>
+
+  <script>
+    // Get photo ID from URL
+    const pathParts = window.location.pathname.split('/');
+    const photoId = pathParts[pathParts.length - 1];
+
+    // Fetch gallery data
+    async function loadGallery() {
+      try {
+        const response = await fetch(`/api/gallery/${photoId}`);
+
+        if (!response.ok) {
+          throw new Error('Gallery not found');
+        }
+
+        const data = await response.json();
+        displayGallery(data);
+      } catch (error) {
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            <h2>Oops!</h2>
+            <p>We couldn't find this photo. It may have been deleted or the link is incorrect.</p>
+          </div>
+        `;
+      }
+    }
+
+    function displayGallery(data) {
+      const imageUrl = data.image_url;
+      const timestamp = data.timestamp || '';
+
+      document.getElementById('content').innerHTML = `
+        <div class="photo-container">
+          <img src="${imageUrl}" alt="AI Enhanced Photo" id="photoImage" />
+        </div>
+
+        <div class="buttons">
+          <button onclick="downloadPhoto()">📥 Download Photo</button>
+          <button onclick="window.open('${imageUrl}', '_blank')">🔍 View Full Size</button>
+        </div>
+
+        <div class="share-section">
+          <h2>Share Your Photo</h2>
+          <div class="share-buttons">
+            <button class="share-btn" onclick="shareToFacebook()">📘 Facebook</button>
+            <button class="share-btn" onclick="shareToTwitter()">🐦 Twitter</button>
+            <button class="share-btn" onclick="copyLink()">🔗 Copy Link</button>
+          </div>
+        </div>
+
+        <div class="footer">
+          ${timestamp ? `<p>Created: ${new Date(timestamp).toLocaleString()}</p>` : ''}
+          <p>Powered by AI Photo Booth</p>
+        </div>
+      `;
+    }
+
+    function downloadPhoto() {
+      const img = document.getElementById('photoImage');
+      const link = document.createElement('a');
+      link.href = img.src;
+      link.download = `ai-photo-${photoId}.jpg`;
+      link.click();
+    }
+
+    function shareToFacebook() {
+      const url = encodeURIComponent(window.location.href);
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+    }
+
+    function shareToTwitter() {
+      const url = encodeURIComponent(window.location.href);
+      const text = encodeURIComponent('Check out my AI-enhanced photo!');
+      window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+    }
+
+    function copyLink() {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        alert('Link copied to clipboard!');
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = window.location.href;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert('Link copied to clipboard!');
+      });
+    }
+
+    // Load gallery on page load
+    loadGallery();
+  </script>
+</body>
+</html>
