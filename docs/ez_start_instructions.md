@@ -44,7 +44,10 @@ Should see:
 INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
----
+Terminal 3 - Cloudflare Tunnel
+```bash
+cloudflared tunnel --url http://localhost:8000
+``` 
 
 ## Access the App
 
