@@ -28,7 +28,15 @@
       "Bash(cat:*)",
       "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" NikonBridge.sln /p:Configuration=Release /p:Platform=x64)",
       "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/MSBuild.exe\" NikonBridge.sln //p:Configuration=Release //p:Platform=x64)",
-      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Release /p:Platform=x64)"
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\" \"C:\\Users\\willi\\image_gen_deploy\\bridge-dotnet\\NikonBridge\\NikonBridge.sln\" /p:Configuration=Release /p:Platform=x64)",
+      "Bash(start /B NikonBridge.exe)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(nul)",
+      "Bash(python:*)",
+      "Bash(netstat:*)",
+      "Bash(uvicorn:*)",
+      "Bash(pip install:*)",
+      "Bash(py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000)"
     ],
     "deny": [],
     "ask": []
