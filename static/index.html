@@ -121,13 +121,49 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="booth">AI Booth</button>
+    <button class="tab active" data-tab="user">User</button>
+    <button class="tab" data-tab="booth">Dev</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
 
-  <!-- AI Booth Tab -->
-  <div id="booth" class="tab-content active">
-    <h1>AI Photo Booth</h1>
+  <!-- User Tab (Simplified) -->
+  <div id="user" class="tab-content active">
+    <h1 style="text-align:center; color:#667eea;">AI Photo Booth</h1>
+
+    <div class="row" style="justify-content:center;">
+      <label for="userCategory">Style Category</label>
+      <select id="userCategory">
+        <option value="background">background</option>
+        <option value="retheme">retheme</option>
+      </select>
+
+      <label for="userStyle">Style</label>
+      <select id="userStyle"></select>
+    </div>
+
+    <div class="row" style="justify-content:center; margin-top:30px;">
+      <button id="btnUserShoot" style="background:linear-gradient(135deg, #28a745 0%, #20c997 100%);color:white;font-size:32px;font-weight:bold;padding:30px 80px;border:none;border-radius:16px;cursor:pointer;box-shadow:0 6px 20px rgba(40,167,69,0.4);transition:transform 0.2s;">SHOOT</button>
+    </div>
+
+    <div class="row" style="justify-content:center; margin-top:20px;">
+      <label for="userFile">Or upload a photo:</label>
+      <input id="userFile" type="file" accept="image/*" capture="environment" />
+      <button id="userSubmit">Edit</button>
+    </div>
+
+    <div style="text-align:center;">
+      <img id="userPreview" alt="preview" style="max-width:100%; max-height:400px; margin-top:20px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1);" />
+    </div>
+
+    <div id="userStatus" class="muted" style="text-align:center; margin-top:10px; font-size:1.1em;"></div>
+
+    <h2 style="text-align:center;">Results</h2>
+    <div id="userResults" class="gallery"></div>
+  </div>
+
+  <!-- Dev Tab (Full Controls) -->
+  <div id="booth" class="tab-content">
+    <h1>Dev Controls</h1>
 
     <div class="row">
       <label for="category">Style Category</label>
@@ -815,11 +851,216 @@
           throw new Error(err.detail || 'Failed');
         }
         await loadStyles();
+        await loadUserStyles();
         statusEl.textContent = 'Saved. New style added.';
       } catch (e) {
         statusEl.textContent = 'Error: ' + e.message;
       }
     });
+
+    // =====================
+    // USER TAB FUNCTIONALITY
+    // =====================
+    const userCategoryEl = document.getElementById('userCategory');
+    const userStyleEl = document.getElementById('userStyle');
+    const userFileEl = document.getElementById('userFile');
+    const userSubmitEl = document.getElementById('userSubmit');
+    const userPreviewEl = document.getElementById('userPreview');
+    const userStatusEl = document.getElementById('userStatus');
+    const userResultsEl = document.getElementById('userResults');
+    const btnUserShoot = document.getElementById('btnUserShoot');
+
+    let isUserCountingDown = false;
+
+    async function loadUserStyles() {
+      const cat = userCategoryEl.value;
+      userStatusEl.textContent = 'Loading styles...';
+      try {
+        const res = await fetch(`/styles?category=${encodeURIComponent(cat)}`);
+        const data = await res.json();
+        userStyleEl.innerHTML = '';
+        for (const s of data.styles) {
+          const opt = document.createElement('option');
+          opt.value = s.path;
+          opt.textContent = s.name;
+          userStyleEl.appendChild(opt);
+        }
+        userStatusEl.textContent = '';
+      } catch (e) {
+        userStatusEl.textContent = 'Failed to load styles';
+      }
+    }
+
+    userCategoryEl.addEventListener('change', loadUserStyles);
+
+    function appendUserResults(urls) {
+      for (const url of urls) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'result';
+        const link = document.createElement('a');
+        link.href = url; link.textContent = 'Open'; link.target = '_blank';
+        card.appendChild(img);
+        card.appendChild(link);
+        userResultsEl.prepend(card);
+      }
+    }
+
+    // User SHOOT button with countdown
+    async function userCountdownShoot() {
+      if (isUserCountingDown) return;
+
+      isUserCountingDown = true;
+      const originalText = btnUserShoot.textContent;
+
+      // Countdown from 3 to 1
+      for (let i = 3; i >= 1; i--) {
+        btnUserShoot.textContent = i.toString();
+        btnUserShoot.style.fontSize = '48px';
+        userStatusEl.textContent = `Get ready... ${i}`;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      btnUserShoot.textContent = 'CAPTURING...';
+      btnUserShoot.style.fontSize = '24px';
+      userStatusEl.textContent = 'Capturing photo...';
+
+      try {
+        const resp = await fetch('/sdk/shoot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pin: pinInput.value || undefined,
+            bridge_url: bridgeUrlEl.value || undefined
+          })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'shoot failed');
+        }
+
+        const data = await resp.json();
+        userStatusEl.textContent = data.message || 'Photo captured!';
+
+        if (data.files && data.files.length > 0) {
+          const filePath = data.files[0];
+          const filename = filePath.split(/[/\\]/).pop();
+
+          if (filename) {
+            const capturedUrl = '/inputs/' + filename + '?ts=' + Date.now();
+            userPreviewEl.src = capturedUrl;
+
+            const stylePath = userStyleEl.value;
+            if (!stylePath) {
+              userStatusEl.textContent = 'Photo captured! (No style selected)';
+              btnUserShoot.textContent = originalText;
+              btnUserShoot.style.fontSize = '32px';
+              isUserCountingDown = false;
+              return;
+            }
+
+            btnUserShoot.textContent = 'AI EDITING...';
+            userStatusEl.textContent = 'Applying AI magic...';
+
+            try {
+              const imgResp = await fetch(capturedUrl);
+              const imgBlob = await imgResp.blob();
+
+              const fd = new FormData();
+              fd.append('file', imgBlob, filename);
+              fd.append('style_path', stylePath);
+              if (pinInput.value) fd.append('pin', pinInput.value);
+
+              const editResp = await fetch('/edit', { method: 'POST', body: fd });
+              if (!editResp.ok) {
+                const err = await editResp.json().catch(() => ({ detail: 'Unknown error'}));
+                throw new Error(err.detail || 'AI editing failed');
+              }
+
+              const editData = await editResp.json();
+
+              if (editData.files && editData.files.length > 0) {
+                userPreviewEl.src = editData.files[0] + '?ts=' + Date.now();
+                userStatusEl.textContent = 'Photo ready!';
+                appendUserResults(editData.files);
+
+                if (editData.qr_code_url && editData.gallery_url) {
+                  showQrModal(editData.qr_code_url, editData.gallery_url);
+                }
+
+                // Reconnect camera silently
+                btnUserShoot.textContent = 'GETTING READY...';
+                try {
+                  const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+                  await fetch(bridge + '/sdk/connect', { method: 'POST' });
+                  userStatusEl.textContent = 'Ready for next photo!';
+                } catch (reconnectErr) {
+                  userStatusEl.textContent = 'Photo ready! Tap SHOOT for another.';
+                }
+              } else {
+                userStatusEl.textContent = 'Something went wrong. Try again!';
+              }
+            } catch (editErr) {
+              userStatusEl.textContent = 'Error: ' + editErr.message;
+            }
+          }
+        }
+      } catch (e) {
+        userStatusEl.textContent = 'Error: ' + e.message;
+      } finally {
+        btnUserShoot.textContent = originalText;
+        btnUserShoot.style.fontSize = '32px';
+        isUserCountingDown = false;
+      }
+    }
+
+    btnUserShoot.addEventListener('click', userCountdownShoot);
+
+    // User file upload
+    userFileEl.addEventListener('change', () => {
+      const file = userFileEl.files && userFileEl.files[0];
+      if (!file) { userPreviewEl.src = ''; return; }
+      const url = URL.createObjectURL(file);
+      userPreviewEl.src = url;
+    });
+
+    // User Edit button
+    userSubmitEl.addEventListener('click', async () => {
+      const file = userFileEl.files && userFileEl.files[0];
+      const stylePath = userStyleEl.value;
+      if (!file || !stylePath) {
+        userStatusEl.textContent = 'Select a style and an image first.';
+        return;
+      }
+      userStatusEl.textContent = 'Uploading and editing...';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('style_path', stylePath);
+      if (pinInput.value) fd.append('pin', pinInput.value);
+
+      try {
+        const resp = await fetch('/edit', { method: 'POST', body: fd });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error'}));
+          throw new Error(err.detail || 'Failed');
+        }
+        const data = await resp.json();
+        userStatusEl.textContent = 'Done!';
+        appendUserResults(data.files);
+
+        if (data.qr_code_url && data.gallery_url) {
+          showQrModal(data.qr_code_url, data.gallery_url);
+        }
+      } catch (e) {
+        userStatusEl.textContent = 'Error: ' + e.message;
+      }
+    });
+
+    // Load user styles on init
+    loadUserStyles();
   </script>
 </body>
 </html>
