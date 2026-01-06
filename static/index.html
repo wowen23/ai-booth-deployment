@@ -128,6 +128,9 @@
 
   <!-- User Tab (Simplified) -->
   <div id="user" class="tab-content active">
+    <div class="row" style="justify-content:center; margin-bottom:10px;">
+      <button id="btnUserLiveView" style="background:linear-gradient(135deg, #28a745 0%, #20c997 100%);color:white;font-size:32px;font-weight:bold;padding:30px 80px;border:none;border-radius:16px;cursor:pointer;box-shadow:0 6px 20px rgba(40,167,69,0.4);transition:transform 0.2s;">START LIVE VIEW</button>
+    </div>
     <h1 style="text-align:center; color:#667eea;">AI Photo Booth</h1>
 
     <div class="row" style="justify-content:center;">
@@ -869,8 +872,32 @@
     const userStatusEl = document.getElementById('userStatus');
     const userResultsEl = document.getElementById('userResults');
     const btnUserShoot = document.getElementById('btnUserShoot');
+    const btnUserLiveView = document.getElementById('btnUserLiveView');
 
     let isUserCountingDown = false;
+
+    // User Live View button
+    btnUserLiveView.addEventListener('click', async () => {
+      try {
+        btnUserLiveView.textContent = 'CONNECTING...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+        // First connect camera
+        const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!connectResp.ok) throw new Error('Connect failed');
+
+        // Then start live view
+        const liveResp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!liveResp.ok) throw new Error('Start live failed');
+
+        btnUserLiveView.textContent = 'LIVE VIEW ON';
+        btnUserLiveView.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
+        userStatusEl.textContent = 'Camera ready! Hit SHOOT when ready.';
+      } catch (e) {
+        btnUserLiveView.textContent = 'START LIVE VIEW';
+        userStatusEl.textContent = 'Error: ' + e.message;
+      }
+    });
 
     async function loadUserStyles() {
       const cat = userCategoryEl.value;
@@ -914,6 +941,23 @@
 
       isUserCountingDown = true;
       const originalText = btnUserShoot.textContent;
+
+      // First connect the camera
+      btnUserShoot.textContent = 'CONNECTING...';
+      btnUserShoot.style.fontSize = '24px';
+      userStatusEl.textContent = 'Connecting camera...';
+
+      try {
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!connectResp.ok) throw new Error('Camera connect failed');
+      } catch (e) {
+        userStatusEl.textContent = 'Error: ' + e.message;
+        btnUserShoot.textContent = originalText;
+        btnUserShoot.style.fontSize = '32px';
+        isUserCountingDown = false;
+        return;
+      }
 
       // Countdown from 3 to 1
       for (let i = 3; i >= 1; i--) {
