@@ -1,3 +1,3 @@
-put the subject into the office (american version_) with Michael scott, and a dunder mifflin hat.
+take the subject and put him together with the people from this reference image in a new image with a clean white background. If the subject does not have legs, add legs to him. Change his clothes to match the people in the reference image.
 
 <reference:office.jpg>

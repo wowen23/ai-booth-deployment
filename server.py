@@ -108,6 +108,7 @@ async def edit_image(
     if not style_abs.exists() or not style_abs.is_file():
         raise HTTPException(status_code=400, detail="Invalid style_path")
     prompt_text = style_abs.read_text(encoding="utf-8").strip()
+    style_dir = str(style_abs.parent)  # Directory containing the style file (for reference images)
 
     # Read image bytes
     try:
@@ -117,7 +118,7 @@ async def edit_image(
 
     # Call Gemini edit
     try:
-        images = edit_with_gemini_image(img_bytes, prompt_text, model=editor_model)
+        images = edit_with_gemini_image(img_bytes, prompt_text, model=editor_model, style_dir=style_dir)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation error: {e}")
     if not images:
@@ -259,6 +260,7 @@ class _IntegratedHandler(FileSystemEventHandler):
         self.output_dir = output_dir
         self.archive_dir = archive_dir
         self.prompt_text = self.watch_style_path.read_text(encoding="utf-8").strip() if self.watch_style_path.exists() else ""
+        self.style_dir = str(self.watch_style_path.parent) if self.watch_style_path.exists() else None
 
     def on_created(self, event):
         if not isinstance(event, FileCreatedEvent) or event.is_directory:
@@ -279,7 +281,7 @@ class _IntegratedHandler(FileSystemEventHandler):
             _watch_log(f"read failed: {e}")
             return
         try:
-            images = edit_with_gemini_image(img_bytes, self.prompt_text, model=self.editor_model)
+            images = edit_with_gemini_image(img_bytes, self.prompt_text, model=self.editor_model, style_dir=self.style_dir)
         except Exception as e:
             _watch_log(f"edit error: {e}")
             return
