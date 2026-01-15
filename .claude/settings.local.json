@@ -37,7 +37,9 @@
       "Bash(uvicorn:*)",
       "Bash(pip install:*)",
       "Bash(py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []
