@@ -103,6 +103,7 @@
       height: calc(100vh - 60px);
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
       padding: 20px;
+      padding-left: 40px; /* Extra 20px to avoid left edge cutoff */
       box-sizing: border-box;
       overflow: hidden;
     }
@@ -212,10 +213,10 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
-      padding: 50px 30px;
-      font-size: 48px;
+      padding: 35px 25px;
+      font-size: 36px;
       font-weight: 800;
-      border-radius: 24px;
+      border-radius: 20px;
       cursor: pointer;
       box-shadow: 0 10px 40px rgba(102, 126, 234, 0.5);
       transition: all 0.2s;
@@ -418,7 +419,10 @@
     <div class="kiosk-container">
       <div class="kiosk-header">
         <h1 class="kiosk-title">AI Photo Booth</h1>
-        <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Enter Fullscreen</button>
+        <div style="display:flex; gap:15px;">
+          <button id="kioskStartLiveBtn" class="kiosk-fullscreen-btn">Start Live View</button>
+          <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Enter Fullscreen</button>
+        </div>
       </div>
 
       <div class="kiosk-main">
@@ -438,9 +442,12 @@
           <button id="kioskShootBtn" class="kiosk-shoot-btn">Take Photo</button>
 
           <div class="kiosk-style-section">
-            <div class="kiosk-style-label">Choose Your Style</div>
+            <div class="kiosk-style-label" style="font-size:16px; color:rgba(255,255,255,0.5); margin-bottom:5px;">Choose Your Style</div>
+            <div class="kiosk-style-label" style="color:#28a745; font-size:20px;">Background Swap</div>
+            <div style="color:rgba(255,255,255,0.4); font-size:14px; margin-bottom:8px;">Keep you, change the scene</div>
             <div id="kioskBackgroundStyles" class="kiosk-style-grid"></div>
-            <div class="kiosk-style-label" style="margin-top:15px;">Retheme</div>
+            <div class="kiosk-style-label" style="margin-top:20px; color:#17a2b8; font-size:20px;">Full Retheme</div>
+            <div style="color:rgba(255,255,255,0.4); font-size:14px; margin-bottom:8px;">Transform the entire image</div>
             <div id="kioskRethemeStyles" class="kiosk-style-grid"></div>
           </div>
         </div>
@@ -1581,6 +1588,7 @@
     // KIOSK TAB FUNCTIONALITY
     // =====================
     const kioskFullscreenBtn = document.getElementById('kioskFullscreenBtn');
+    const kioskStartLiveBtn = document.getElementById('kioskStartLiveBtn');
     const kioskShootBtn = document.getElementById('kioskShootBtn');
     const kioskLiveStream = document.getElementById('kioskLiveStream');
     const kioskResultImg = document.getElementById('kioskResultImg');
@@ -1617,6 +1625,26 @@
         kioskFullscreenBtn.textContent = 'Exit Fullscreen';
       } else {
         kioskFullscreenBtn.textContent = 'Enter Fullscreen';
+      }
+    });
+
+    // Start Live View button handler
+    kioskStartLiveBtn.addEventListener('click', async () => {
+      if (kioskLiveViewActive) {
+        // Stop live view
+        await stopKioskLiveView();
+        kioskStartLiveBtn.textContent = 'Start Live View';
+        kioskPlaceholder.style.display = 'block';
+        kioskLiveStream.style.display = 'none';
+      } else {
+        // Start live view
+        kioskStartLiveBtn.textContent = 'Connecting...';
+        await startKioskLiveView();
+        if (kioskLiveViewActive) {
+          kioskStartLiveBtn.textContent = 'Stop Live View';
+        } else {
+          kioskStartLiveBtn.textContent = 'Start Live View';
+        }
       }
     });
 
