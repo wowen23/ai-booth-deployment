@@ -38,6 +38,7 @@ Nikon Bridge running at http://localhost:9001
 ```bash
 py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000
 ```
+python -m uvicorn server:app --host 0.0.0.0 --port 8000
 
 Should see:
 ```
