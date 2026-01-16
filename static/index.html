@@ -95,6 +95,234 @@
     .qr-modal button:active {
       transform: translateY(0);
     }
+
+    /* Kiosk Mode Styles - Optimized for 4K touchscreen (3840x2160 on 13.3" display) */
+    .kiosk-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 60px);
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      padding: 20px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .kiosk-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .kiosk-title {
+      color: white;
+      font-size: 42px;
+      font-weight: 700;
+      text-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+      margin: 0;
+    }
+
+    .kiosk-fullscreen-btn {
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 15px 25px;
+      font-size: 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .kiosk-fullscreen-btn:hover {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .kiosk-main {
+      display: flex;
+      flex: 1;
+      gap: 20px;
+      min-height: 0;
+    }
+
+    .kiosk-preview-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.3);
+      border-radius: 24px;
+      border: 3px solid rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kiosk-live-stream {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 16px;
+    }
+
+    .kiosk-preview-placeholder {
+      color: rgba(255,255,255,0.5);
+      font-size: 28px;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .kiosk-status {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 12px 30px;
+      border-radius: 30px;
+      font-size: 22px;
+      font-weight: 500;
+    }
+
+    .kiosk-countdown {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 200px;
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 0 80px rgba(102, 126, 234, 0.8), 0 0 120px rgba(102, 126, 234, 0.5);
+      animation: countdownPulse 1s ease-in-out;
+      z-index: 10;
+    }
+    @keyframes countdownPulse {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+      50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    .kiosk-controls {
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .kiosk-shoot-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 50px 30px;
+      font-size: 48px;
+      font-weight: 800;
+      border-radius: 24px;
+      cursor: pointer;
+      box-shadow: 0 10px 40px rgba(102, 126, 234, 0.5);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .kiosk-shoot-btn:hover:not(:disabled) {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 50px rgba(102, 126, 234, 0.6);
+    }
+    .kiosk-shoot-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .kiosk-shoot-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .kiosk-style-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .kiosk-style-label {
+      color: rgba(255,255,255,0.7);
+      font-size: 18px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .kiosk-style-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .kiosk-style-btn {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+      border: none;
+      padding: 25px 20px;
+      font-size: 20px;
+      font-weight: 700;
+      border-radius: 16px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .kiosk-style-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(40, 167, 69, 0.5);
+    }
+    .kiosk-style-btn.selected {
+      background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+      box-shadow: 0 6px 25px rgba(255, 193, 7, 0.5);
+    }
+
+    .kiosk-result-preview {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      z-index: 900;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    .kiosk-result-preview.active {
+      display: flex;
+    }
+    .kiosk-result-preview img {
+      max-width: 80%;
+      max-height: 70%;
+      border-radius: 20px;
+      box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+    }
+    .kiosk-result-actions {
+      margin-top: 30px;
+      display: flex;
+      gap: 20px;
+    }
+    .kiosk-result-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 25px 50px;
+      font-size: 24px;
+      font-weight: 700;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .kiosk-result-btn:hover {
+      transform: translateY(-3px);
+    }
+    .kiosk-result-btn.secondary {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
   </style>
 </head>
 <body>
@@ -122,6 +350,7 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="user">User</button>
+    <button class="tab" data-tab="kiosk">Kiosk</button>
     <button class="tab" data-tab="booth">Dev</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
@@ -182,6 +411,50 @@
 
     <h2 style="text-align:center;">Results</h2>
     <div id="userResults" class="gallery"></div>
+  </div>
+
+  <!-- Kiosk Tab (Touch-optimized for 4K touchscreen) -->
+  <div id="kiosk" class="tab-content">
+    <div class="kiosk-container">
+      <div class="kiosk-header">
+        <h1 class="kiosk-title">AI Photo Booth</h1>
+        <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Enter Fullscreen</button>
+      </div>
+
+      <div class="kiosk-main">
+        <!-- Live Preview Area -->
+        <div class="kiosk-preview-area">
+          <div id="kioskPlaceholder" class="kiosk-preview-placeholder">
+            Tap a style to start the camera<br/>and take your AI-enhanced photo!
+          </div>
+          <img id="kioskLiveStream" class="kiosk-live-stream" style="display:none;" alt="Live Preview" />
+          <img id="kioskResultImg" class="kiosk-live-stream" style="display:none;" alt="Your Photo" />
+          <div id="kioskCountdown" class="kiosk-countdown" style="display:none;"></div>
+          <div id="kioskStatus" class="kiosk-status" style="display:none;"></div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="kiosk-controls">
+          <button id="kioskShootBtn" class="kiosk-shoot-btn">Take Photo</button>
+
+          <div class="kiosk-style-section">
+            <div class="kiosk-style-label">Choose Your Style</div>
+            <div id="kioskBackgroundStyles" class="kiosk-style-grid"></div>
+            <div class="kiosk-style-label" style="margin-top:15px;">Retheme</div>
+            <div id="kioskRethemeStyles" class="kiosk-style-grid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kiosk Result Overlay -->
+  <div id="kioskResultOverlay" class="kiosk-result-preview">
+    <img id="kioskResultOverlayImg" src="" alt="Your AI Photo" />
+    <div class="kiosk-result-actions">
+      <button id="kioskShowQR" class="kiosk-result-btn">Get My Photo</button>
+      <button id="kioskTakeAnother" class="kiosk-result-btn secondary">Take Another</button>
+    </div>
   </div>
 
   <!-- Dev Tab (Full Controls) -->
@@ -1303,6 +1576,305 @@
 
     // Load style buttons on init
     loadStyleButtons();
+
+    // =====================
+    // KIOSK TAB FUNCTIONALITY
+    // =====================
+    const kioskFullscreenBtn = document.getElementById('kioskFullscreenBtn');
+    const kioskShootBtn = document.getElementById('kioskShootBtn');
+    const kioskLiveStream = document.getElementById('kioskLiveStream');
+    const kioskResultImg = document.getElementById('kioskResultImg');
+    const kioskPlaceholder = document.getElementById('kioskPlaceholder');
+    const kioskCountdown = document.getElementById('kioskCountdown');
+    const kioskStatus = document.getElementById('kioskStatus');
+    const kioskBackgroundStyles = document.getElementById('kioskBackgroundStyles');
+    const kioskRethemeStyles = document.getElementById('kioskRethemeStyles');
+    const kioskResultOverlay = document.getElementById('kioskResultOverlay');
+    const kioskResultOverlayImg = document.getElementById('kioskResultOverlayImg');
+    const kioskShowQR = document.getElementById('kioskShowQR');
+    const kioskTakeAnother = document.getElementById('kioskTakeAnother');
+
+    let kioskSelectedStyle = null;
+    let kioskIsProcessing = false;
+    let kioskLiveViewActive = false;
+    let kioskLastQRData = null;
+
+    // Fullscreen toggle
+    kioskFullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.log('Fullscreen error:', err);
+        });
+        kioskFullscreenBtn.textContent = 'Exit Fullscreen';
+      } else {
+        document.exitFullscreen();
+        kioskFullscreenBtn.textContent = 'Enter Fullscreen';
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) {
+        kioskFullscreenBtn.textContent = 'Exit Fullscreen';
+      } else {
+        kioskFullscreenBtn.textContent = 'Enter Fullscreen';
+      }
+    });
+
+    // Show status message
+    function showKioskStatus(msg, duration = 0) {
+      kioskStatus.textContent = msg;
+      kioskStatus.style.display = 'block';
+      if (duration > 0) {
+        setTimeout(() => { kioskStatus.style.display = 'none'; }, duration);
+      }
+    }
+
+    function hideKioskStatus() {
+      kioskStatus.style.display = 'none';
+    }
+
+    // Load kiosk style buttons
+    async function loadKioskStyles() {
+      // Load background styles
+      try {
+        const bgRes = await fetch('/styles?category=background');
+        const bgData = await bgRes.json();
+        kioskBackgroundStyles.innerHTML = '';
+        for (const s of bgData.styles) {
+          const btn = document.createElement('button');
+          btn.className = 'kiosk-style-btn';
+          btn.dataset.style = s.path;
+          btn.dataset.category = 'background';
+          btn.textContent = s.name;
+          btn.addEventListener('click', () => selectKioskStyle(btn, s.path));
+          kioskBackgroundStyles.appendChild(btn);
+        }
+      } catch (e) {
+        kioskBackgroundStyles.innerHTML = '<span style="color:#999;">Failed to load</span>';
+      }
+
+      // Load retheme styles
+      try {
+        const rtRes = await fetch('/styles?category=retheme');
+        const rtData = await rtRes.json();
+        kioskRethemeStyles.innerHTML = '';
+        for (const s of rtData.styles) {
+          const btn = document.createElement('button');
+          btn.className = 'kiosk-style-btn';
+          btn.dataset.style = s.path;
+          btn.dataset.category = 'retheme';
+          btn.textContent = s.name;
+          btn.addEventListener('click', () => selectKioskStyle(btn, s.path));
+          kioskRethemeStyles.appendChild(btn);
+        }
+      } catch (e) {
+        kioskRethemeStyles.innerHTML = '<span style="color:#999;">Failed to load</span>';
+      }
+
+      // Auto-select first style if available
+      const firstBtn = kioskBackgroundStyles.querySelector('.kiosk-style-btn') ||
+                       kioskRethemeStyles.querySelector('.kiosk-style-btn');
+      if (firstBtn) {
+        selectKioskStyle(firstBtn, firstBtn.dataset.style);
+      }
+    }
+
+    // Select a style
+    function selectKioskStyle(btn, stylePath) {
+      // Remove selection from all buttons
+      document.querySelectorAll('.kiosk-style-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      kioskSelectedStyle = stylePath;
+
+      // Start live view if not already active
+      if (!kioskLiveViewActive && !kioskIsProcessing) {
+        startKioskLiveView();
+      }
+    }
+
+    // Start live view
+    async function startKioskLiveView() {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+      try {
+        showKioskStatus('Connecting camera...');
+
+        // Connect camera
+        const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!connectResp.ok) throw new Error('Connect failed');
+
+        // Start live view
+        const liveResp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!liveResp.ok) throw new Error('Start live failed');
+
+        // Show live stream
+        kioskPlaceholder.style.display = 'none';
+        kioskResultImg.style.display = 'none';
+        kioskLiveStream.src = bridge + '/live.mjpg?ts=' + Date.now();
+        kioskLiveStream.style.display = 'block';
+        kioskLiveViewActive = true;
+
+        showKioskStatus('Ready! Tap "Take Photo" when ready.', 3000);
+      } catch (e) {
+        showKioskStatus('Camera error: ' + e.message, 5000);
+      }
+    }
+
+    // Stop live view
+    async function stopKioskLiveView() {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      try {
+        await fetch(bridge + '/sdk/stop-live', { method: 'POST' });
+      } catch (e) {}
+      kioskLiveStream.src = '';
+      kioskLiveViewActive = false;
+    }
+
+    // Show countdown animation
+    async function showCountdown(num) {
+      kioskCountdown.textContent = num;
+      kioskCountdown.style.display = 'block';
+      // Trigger animation restart
+      kioskCountdown.style.animation = 'none';
+      kioskCountdown.offsetHeight; // Force reflow
+      kioskCountdown.style.animation = 'countdownPulse 1s ease-in-out';
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Main shoot function
+    async function kioskShoot() {
+      if (kioskIsProcessing) return;
+      if (!kioskSelectedStyle) {
+        showKioskStatus('Please select a style first!', 3000);
+        return;
+      }
+
+      kioskIsProcessing = true;
+      kioskShootBtn.disabled = true;
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+
+      try {
+        // Connect camera if not live
+        if (!kioskLiveViewActive) {
+          showKioskStatus('Connecting camera...');
+          const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+          if (!connectResp.ok) throw new Error('Camera connect failed');
+        }
+
+        // Countdown
+        for (let i = 3; i >= 1; i--) {
+          await showCountdown(i);
+        }
+        kioskCountdown.style.display = 'none';
+
+        // Capture
+        showKioskStatus('Capturing...');
+        const resp = await fetch('/sdk/shoot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pin: pinInput.value || undefined,
+            bridge_url: bridgeUrlEl.value || undefined
+          })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(err.detail || 'Capture failed');
+        }
+
+        const data = await resp.json();
+
+        if (data.files && data.files.length > 0) {
+          const filePath = data.files[0];
+          const filename = filePath.split(/[/\\]/).pop();
+
+          if (filename) {
+            // Show captured image briefly
+            const capturedUrl = '/inputs/' + filename + '?ts=' + Date.now();
+            kioskLiveStream.style.display = 'none';
+            kioskResultImg.src = capturedUrl;
+            kioskResultImg.style.display = 'block';
+
+            // Apply AI
+            showKioskStatus('Applying AI magic...');
+            const imgResp = await fetch(capturedUrl);
+            const imgBlob = await imgResp.blob();
+
+            const fd = new FormData();
+            fd.append('file', imgBlob, filename);
+            fd.append('style_path', kioskSelectedStyle);
+            if (pinInput.value) fd.append('pin', pinInput.value);
+
+            const editResp = await fetch('/edit', { method: 'POST', body: fd });
+            if (!editResp.ok) {
+              const err = await editResp.json().catch(() => ({ detail: 'Unknown error' }));
+              throw new Error(err.detail || 'AI editing failed');
+            }
+
+            const editData = await editResp.json();
+
+            if (editData.files && editData.files.length > 0) {
+              // Show result
+              const resultUrl = editData.files[0] + '?ts=' + Date.now();
+              kioskResultImg.src = resultUrl;
+              kioskResultOverlayImg.src = resultUrl;
+
+              // Save QR data for later
+              if (editData.qr_code_url && editData.gallery_url) {
+                kioskLastQRData = {
+                  qr_code_url: editData.qr_code_url,
+                  gallery_url: editData.gallery_url
+                };
+              }
+
+              // Show result overlay
+              kioskResultOverlay.classList.add('active');
+              hideKioskStatus();
+            }
+          }
+        }
+      } catch (e) {
+        showKioskStatus('Error: ' + e.message, 5000);
+        kioskCountdown.style.display = 'none';
+      } finally {
+        kioskIsProcessing = false;
+        kioskShootBtn.disabled = false;
+      }
+    }
+
+    kioskShootBtn.addEventListener('click', kioskShoot);
+
+    // Result overlay buttons
+    kioskShowQR.addEventListener('click', () => {
+      kioskResultOverlay.classList.remove('active');
+      if (kioskLastQRData) {
+        showQrModal(kioskLastQRData.qr_code_url, kioskLastQRData.gallery_url);
+      }
+    });
+
+    kioskTakeAnother.addEventListener('click', async () => {
+      kioskResultOverlay.classList.remove('active');
+      kioskResultImg.style.display = 'none';
+      kioskLastQRData = null;
+
+      // Restart live view
+      await startKioskLiveView();
+    });
+
+    // Initialize kiosk when tab is selected
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        if (tab.dataset.tab === 'kiosk') {
+          loadKioskStyles();
+        }
+      });
+    });
+
+    // Load kiosk styles on init if kiosk tab is visible
+    if (document.getElementById('kiosk').classList.contains('active')) {
+      loadKioskStyles();
+    }
   </script>
 </body>
 </html>
