@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI-powered photo booth that captures from a Nikon Z6 II camera via USB and applies AI style transformations using Google Gemini. Multi-layer architecture: Python FastAPI web server → .NET bridge → C++/CLI wrapper → Nikon MAID SDK.
 
-## Architecture Flow
+## Architecture
 
 ```
 [Nikon Z6 II Camera via USB]
@@ -15,7 +15,7 @@ AI-powered photo booth that captures from a Nikon Z6 II camera via USB and appli
         ↓
 [.NET Bridge Server (port 9001)] ← ASP.NET Core HTTP API
         ↓
-[Python FastAPI Server (port 8000)] ← Main web server
+[Python FastAPI Server (port 8000)] ← Main web server + Gemini AI
         ↓
 [Web UI Browser (static/index.html)]
 ```
@@ -27,48 +27,35 @@ AI-powered photo booth that captures from a Nikon Z6 II camera via USB and appli
    - .NET bridge provides HTTP API for camera control
    - Python FastAPI proxies requests to bridge and handles AI processing
 
-2. **Image flow**: Camera → `input/` dir → Folder watcher → Gemini AI → `output/` dir → Gallery UI → QR/Email delivery
+2. **Image flow**: Camera → `input/` dir → Folder watcher → Gemini AI → `output/` dir → Gallery UI
 
-3. **Guest delivery**: After AI processing, guests receive their photos via:
-   - QR code displayed on screen (links to mobile-friendly gallery page)
-   - Email with photo attached (via SendGrid)
-   - SMS/MMS (via Telnyx, optional)
+3. **Live view streaming**: Bridge captures frames from SDK and serves as MJPEG stream at `/live.mjpg`
 
-4. **Live view streaming**: Bridge captures frames from SDK and serves as MJPEG stream at `/live.mjpg`
-
-5. **Platform constraints**:
+4. **Platform constraints**:
    - x64 architecture required (Nikon SDK is 64-bit only)
    - Windows-only (Nikon MAID SDK is Windows-native)
    - USB exclusive access (camera must not be open in other software)
 
 ## Build Commands
 
-### .NET Bridge Build
+### .NET Bridge (Release)
 
-**Release build (for deployment):**
 ```bash
 "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe" NikonBridge.sln /p:Configuration=Release /p:Platform=x64
 ```
 
-**Debug build:**
-```bash
-cd bridge-dotnet/NikonBridge
-dotnet build --configuration Debug
-```
+Or open `bridge-dotnet/NikonBridge/NikonBridge.sln` in Visual Studio 2022.
 
-Or open `bridge-dotnet/NikonBridge/NikonBridge.sln` in Visual Studio 2022 and press F5.
-
-**Important build notes:**
-- Must build for x64 platform (not AnyCPU) due to Nikon SDK native dependencies
-- C++/CLI wrapper (NikonMaidWrapper) builds first, then .NET project references it
-- Nikon SDK DLLs must be present in output directory: `NkdPTP.dll`, `dnssd.dll`, `NkRoyalmile.dll`, `Type0029.md3`
-- These DLLs come from `S-SDKZ6_2-006BF-ALLIN/Module/Win/Bin/x64/` directory
-- Release builds are self-contained and can be copied to deployment machines
+**Build requirements:**
+- x64 platform (not AnyCPU) - Nikon SDK is 64-bit only
+- C++/CLI wrapper builds first, then .NET project references it
+- Nikon SDK DLLs must be in output directory: `NkdPTP.dll`, `dnssd.dll`, `NkRoyalmile.dll`, `Type0029.md3`
+- Copy DLLs from `S-SDKZ6_2-006BF-ALLIN/Module/Win/Bin/x64/`
 
 ### Python Server
 
-**Run server:**
 ```bash
+pip install -r requirements.txt
 python server.py
 ```
 
@@ -79,35 +66,25 @@ py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000
 
 Server starts on http://localhost:8000
 
-**Public access via Cloudflare Tunnel:**
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-
 **Install dependencies:**
 ```bash
-pip install -r requirements.txt
+py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
 ## Development Workflow
 
-### Standard startup sequence:
+### Startup Sequence
 
-1. **Ensure Nikon SDK DLLs are in bridge output directory**
-   - Check `bridge-dotnet/NikonBridge/bin/x64/Release/net8.0/` (or Debug)
-   - Copy from `S-SDKZ6_2-006BF-ALLIN/Module/Win/Bin/x64/` if missing
+**Terminal 1 - Camera Bridge:**
+```bash
+cd bridge-dotnet/NikonBridge/bin/x64/Release/net8.0
+./NikonBridge.exe
+```
 
-2. **Start .NET bridge** (terminal 1):
-   ```bash
-   cd bridge-dotnet/NikonBridge/bin/x64/Release/net8.0
-   ./NikonBridge.exe
-   ```
-   Or run from Visual Studio, or use `dotnet run` from project directory.
-
-3. **Start Python server** (terminal 2):
-   ```bash
-   python server.py
-   ```
+**Terminal 2 - Python Server:**
+```bash
+python server.py
+```
 
 4. **Open web UI**: http://localhost:8000
 
@@ -124,30 +101,17 @@ pip install -r requirements.txt
 
 ### Python Backend (FastAPI)
 
-- **server.py** - Main HTTP server (~700 lines)
+- **server.py** (529 lines) - Main HTTP server
   - `/edit` - Apply AI style transformation to uploaded image
   - `/styles` - List available style prompts by category
   - `/prompts` - Create new style prompt file
   - `/sdk/*` - Proxy endpoints to .NET bridge
   - `/watcher/*` - Control folder watcher daemon
-  - `/gallery/{photo_id}` - Serve mobile-friendly gallery page for QR scans
-  - `/api/gallery/{photo_id}` - API to get gallery photo data
-  - `/send-email` - Send AI-enhanced photo to guest via email
   - Serves static UI from `static/index.html`
 
 - **genai_client.py** - Google Gemini API wrapper
   - `edit_with_gemini_image()` - Main AI editing function
   - Requires `GOOGLE_API_KEY` environment variable
-
-- **qr_generator.py** - QR code generation for photo galleries
-  - `generate_photo_qr()` - Create QR code linking to gallery page
-  - `get_qr_code_base64()` - Generate QR as base64 for HTML embedding
-  - Requires `qrcode` package
-
-- **email_sender.py** - Email delivery via SendGrid
-  - `send_photo_email()` - Send photo with attachment to guest
-  - `validate_email()` - Basic email format validation
-  - Requires `SENDGRID_API_KEY` environment variable
 
 - **watcher.py** - Automated folder monitoring daemon
   - Watches `input/` directory for new JPG/PNG files
@@ -157,27 +121,17 @@ pip install -r requirements.txt
 
 ### .NET Bridge (ASP.NET Core)
 
-- **bridge-dotnet/NikonBridge/Program.cs** - HTTP server exposing camera API
-  - `GET /status` - Camera connection state and DLL status
-  - `GET /live.mjpg` - MJPEG live view stream (multipart/x-mixed-replace)
-  - `POST /shoot` - Trigger shutter and download image
-  - `POST /sdk/connect` - Initialize MAID SDK and connect to camera
-  - `POST /sdk/disconnect` - Cleanup and disconnect
-  - `POST /sdk/start-live` - Start live view mode on camera
-  - `POST /sdk/stop-live` - Stop live view mode
-  - Uses `MaidBridge` wrapper class from C++/CLI layer
-  - Reads configuration from `.env` file (WATCH_DIR, BRIDGE_PORT, BRIDGE_FPS)
+- **bridge-dotnet/NikonBridge/Program.cs** - Camera HTTP API (port 9001)
+  - `GET /status` - Connection state
+  - `GET /live.mjpg` - MJPEG live view stream
+  - `POST /shoot` - Trigger shutter
+  - `POST /sdk/connect`, `/sdk/disconnect` - SDK lifecycle
+  - `POST /sdk/start-live`, `/sdk/stop-live` - Live view control
 
-### C++/CLI Wrapper (Native Interop)
+### C++/CLI Wrapper
 
-- **bridge-dotnet/NikonMaidWrapper/NikonMaidWrapper.h/.cpp** - Managed wrapper around native Nikon MAID SDK
-  - `MaidBridge` class exposes SDK functions to .NET
-  - `Connect()` - Initialize SDK, enumerate cameras, open connection
-  - `Disconnect()` - Close camera and terminate SDK
-  - `Shoot()` - Trigger shutter with data event callback
-  - `StartLive()` / `StopLive()` - Control live view mode
-  - `GetLiveFrame()` - Retrieve current live view frame as JPEG bytes
-  - Uses Nikon MAID Type0029 module (USB PTP protocol)
+- **bridge-dotnet/NikonMaidWrapper/** - `MaidBridge` class wraps Nikon MAID SDK
+  - `Connect()`, `Disconnect()`, `Shoot()`, `StartLive()`, `StopLive()`, `GetLiveFrame()`
 
 ### Web Frontend
 
@@ -197,15 +151,9 @@ pip install -r requirements.txt
   - `mode` - Processing mode (background/retheme)
 
 - **.env** (root) - Python server environment
-  - `GOOGLE_API_KEY` - Google AI Studio API key (required)
-  - `APP_ALLOW_ORIGINS` - CORS allowed origins (comma-separated)
+  - `GOOGLE_API_KEY` - Google AI Studio API key
+  - `APP_ALLOW_ORIGINS` - CORS allowed origins
   - `APP_PIN` - Optional PIN security for /edit endpoint
-  - `PUBLIC_BASE_URL` - Base URL for QR codes/emails (default: http://localhost:8000)
-  - `SENDGRID_API_KEY` - SendGrid API key for email delivery (optional)
-  - `FROM_EMAIL` - Sender email address for SendGrid (optional)
-  - `FROM_NAME` - Sender display name for emails (optional)
-  - `TELNYX_API_KEY` - Telnyx API key for SMS/MMS (optional, see docs/SMS_MMS_SETUP.md)
-  - `TELNYX_PHONE_NUMBER` - Telnyx phone number for SMS (optional)
 
 - **bridge-dotnet/NikonBridge/.env** - Bridge environment
   - `WATCH_DIR` - Where to save captured images
@@ -255,12 +203,6 @@ Main differences from master:
 
 ## Troubleshooting
 
-### Kill existing processes (port in use)
-```powershell
-taskkill /F /IM NikonBridge.exe
-taskkill /F /IM python.exe
-```
-
 ### Bridge won't start
 - Verify Nikon SDK DLLs are in bridge output directory
 - Check `.env` file exists with valid WATCH_DIR path
@@ -295,24 +237,19 @@ taskkill /F /IM python.exe
 
 ## Important Implementation Notes
 
-### When modifying camera bridge:
-- Always handle MAID SDK errors gracefully (SDK can return error codes for many operations)
-- Live view mode and capture mode are mutually exclusive in SDK
-- Must stop live view before shooting, then restart after download completes
-- Camera connection can be lost if USB cable disconnects or camera powers off
-- Image download is asynchronous via data event callbacks
+### Camera Bridge
+- Handle MAID SDK errors gracefully (many operations can fail)
+- Stop live view before shooting, restart after download completes
+- Image download is async via data event callbacks
 
-### When modifying Python server:
-- FastAPI endpoints use async/await for I/O operations
-- File uploads are stored temporarily, then passed to Gemini API
-- Large images are automatically resized by Gemini (16MB limit)
-- Folder watcher runs in separate thread to avoid blocking server
+### Python Server
+- Folder watcher runs in separate thread
+- Gemini API has 16MB image limit (auto-resized)
+- WATCH_DIR in bridge must match input_dir in config.json
 
-### When modifying web UI:
-- No build step required, just refresh browser
-- Changes to static files are served immediately by FastAPI
-- MJPEG stream URL must include boundary parameter
-- Camera capture button (`capture="environment"`) works on mobile devices
+### Web UI
+- No build step - just refresh browser
+- Vanilla JS, no framework dependencies
 
 ## Testing
 
@@ -324,8 +261,6 @@ No automated tests currently exist. Manual testing workflow:
 4. **Test capture**: Click Shoot, verify image appears in input/ directory
 5. **Test AI processing**: Upload image, select style, click Edit, verify output in output/
 6. **Test folder watcher**: Start watcher, drop image in input/, verify auto-processing
-7. **Test QR code**: After processing, verify QR code appears and scans to gallery page
-8. **Test email delivery**: Enter email in gallery modal, verify email received with attachment
 
 ## Deployment Checklist
 
@@ -335,18 +270,12 @@ No automated tests currently exist. Manual testing workflow:
 - [ ] Test camera connection on target hardware
 - [ ] Install Visual C++ Runtime if not present (bridge dependency)
 - [ ] Configure GOOGLE_API_KEY for target environment
-- [ ] Configure SENDGRID_API_KEY if using email delivery
-- [ ] Set PUBLIC_BASE_URL for QR codes (use Cloudflare Tunnel for public access)
-- [ ] Test end-to-end capture → AI → display → delivery workflow
+- [ ] Test end-to-end capture → AI → display workflow
 - [ ] Verify USB cable quality (poor cables cause connection issues)
 
 ## Documentation References
 
-- **docs/START_HERE.md** - Quick start guide for new users
-- **docs/INSTRUCTIONS.md** - Comprehensive handoff document with SDK integration details
+- **INSTRUCTIONS.md** - Comprehensive handoff document with SDK integration details (if present in codebase)
 - **docs/SDK_BRIDGE_PLAN.md** - Original bridge architecture plan
 - **docs/PHASE4_WEB_PLAN.md** - Web application design document
-- **docs/ENVIRONMENT_VARIABLES.md** - Complete environment variable reference
-- **docs/EMAIL_AND_HOSTING_SETUP.md** - SendGrid email and public hosting setup
-- **docs/SMS_MMS_SETUP.md** - Telnyx SMS/MMS integration guide
 - **Nikon SDK docs** - See S-SDKZ6_2-006BF-ALLIN/Module/Documents/English/
