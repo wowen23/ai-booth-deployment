@@ -103,8 +103,8 @@ app.MapGet("/live.mjpg", async context => {
                 await context.Response.Body.FlushAsync();
             }
 
-            // Limit to 1 FPS for testing
-            await Task.Delay(1000, context.RequestAborted);
+            // Frame rate limiting based on BRIDGE_FPS setting (default 15)
+            await Task.Delay(1000 / sdk.Fps, context.RequestAborted);
         }
     }
     catch (Exception ex) when (ex is OperationCanceledException || context.RequestAborted.IsCancellationRequested)
