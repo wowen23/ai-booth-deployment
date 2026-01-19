@@ -677,87 +677,101 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
 
     NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
 
-    // Follow the Nikon sample code pattern (GetArrayCapability):
-    // 1. Call CapGet to get the size
-    // 2. Allocate buffer based on size
-    // 3. Call CapGetArray to fill the buffer
+    // First, pump the SDK async queue to process any pending operations
+    // This is required by the Nikon SDK - call Async to process callbacks
+    CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
 
+    // Step 1: Call CapGet with NULL pData to get the size info
     NkMAIDArray stArray;
     memset(&stArray, 0, sizeof(NkMAIDArray));
 
-    // Step 1: Call CapGet to get size
-    Console::WriteLine("[MAID] GetLiveFrame: Step 1 - Calling CapGet to get size...");
     SLONG result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
                             kNkMAIDDataType_ArrayPtr, &stArray);
-    Console::WriteLine(String::Format("[MAID] CapGet result={0}, ulElements={1}, wPhysicalBytes={2}",
-                      result, stArray.ulElements, stArray.wPhysicalBytes));
 
     if (result != kNkMAIDResult_NoError) {
-        Console::WriteLine(String::Format("[MAID] GetLiveFrame CapGet failed with error {0}", result));
         return gcnew array<System::Byte>(0);
     }
 
-    if (stArray.ulElements == 0) {
-        Console::WriteLine("[MAID] No data available (ulElements=0)");
+    if (stArray.ulElements == 0 || stArray.wPhysicalBytes == 0) {
         return gcnew array<System::Byte>(0);
     }
 
-    // Step 2: Allocate buffer (WE manage memory, not SDK)
-    Console::WriteLine("[MAID] GetLiveFrame: Step 2 - Allocating buffer...");
-    stArray.pData = malloc(stArray.ulElements * stArray.wPhysicalBytes);
+    // Step 2: Allocate buffer based on size from CapGet
+    ULONG bufferSize = stArray.ulElements * stArray.wPhysicalBytes;
+    stArray.pData = malloc(bufferSize);
     if (stArray.pData == nullptr) {
-        Console::WriteLine("[MAID] Failed to allocate memory");
         return gcnew array<System::Byte>(0);
     }
 
     // Step 3: Call CapGetArray to fill the buffer
-    Console::WriteLine("[MAID] GetLiveFrame: Step 3 - Calling CapGetArray to fill buffer...");
+    // Note: This returns -127 (NotSupported) on some cameras, but let's try with proper Async pumping
     result = CallMAID(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
-                     kNkMAIDDataType_ArrayPtr, &stArray);
-    Console::WriteLine(String::Format("[MAID] CapGetArray result={0}", result));
+                      kNkMAIDDataType_ArrayPtr, &stArray);
+
+    // Pump async queue after the call
+    for (int i = 0; i < 10 && (result == kNkMAIDResult_Pending || result == kNkMAIDResult_NoError); i++) {
+        CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
+        if (result == kNkMAIDResult_NoError) break;
+        Sleep(10);
+    }
 
     if (result != kNkMAIDResult_NoError) {
-        Console::WriteLine(String::Format("[MAID] GetLiveFrame CapGetArray failed with error {0}", result));
+        // CapGetArray not supported - the data might already be in the buffer from CapGet
+        // with pre-allocated pData. Let's try that approach.
         free(stArray.pData);
-        return gcnew array<System::Byte>(0);
+
+        // Retry with pre-allocated buffer approach
+        memset(&stArray, 0, sizeof(NkMAIDArray));
+        stArray.pData = malloc(1024 * 1024);  // 1MB buffer
+        if (stArray.pData == nullptr) {
+            return gcnew array<System::Byte>(0);
+        }
+        stArray.ulElements = 1024 * 1024;
+
+        result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
+                          kNkMAIDDataType_ArrayPtr, &stArray);
+
+        // Pump async queue
+        for (int i = 0; i < 10; i++) {
+            CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
+            Sleep(10);
+        }
+
+        if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
+            free(stArray.pData);
+            return gcnew array<System::Byte>(0);
+        }
+
+        bufferSize = stArray.ulElements * stArray.wPhysicalBytes;
     }
 
     // Live view data has 512-byte header followed by JPEG data
     ULONG headerSize = 512;
-    ULONG dataSize = stArray.ulElements * stArray.wPhysicalBytes;
 
-    // Debug: Check first few bytes to see if buffer has data
-    unsigned char* pData = static_cast<unsigned char*>(stArray.pData);
-    Console::WriteLine(String::Format("[MAID] First 16 bytes: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2} {8:X2} {9:X2} {10:X2} {11:X2} {12:X2} {13:X2} {14:X2} {15:X2}",
-                      pData[0], pData[1], pData[2], pData[3], pData[4], pData[5], pData[6], pData[7],
-                      pData[8], pData[9], pData[10], pData[11], pData[12], pData[13], pData[14], pData[15]));
-
-    // Check after the 512-byte header for JPEG marker (FF D8)
-    if (dataSize > 512) {
-        Console::WriteLine(String::Format("[MAID] Bytes 512-527: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2} {8:X2} {9:X2} {10:X2} {11:X2} {12:X2} {13:X2} {14:X2} {15:X2}",
-                          pData[512], pData[513], pData[514], pData[515], pData[516], pData[517], pData[518], pData[519],
-                          pData[520], pData[521], pData[522], pData[523], pData[524], pData[525], pData[526], pData[527]));
+    if (bufferSize <= headerSize) {
+        free(stArray.pData);
+        return gcnew array<System::Byte>(0);
     }
 
-    Console::WriteLine(String::Format("[MAID] Total data size: {0} bytes", dataSize));
+    // Check for JPEG signature after header (FF D8)
+    unsigned char* pData = static_cast<unsigned char*>(stArray.pData);
+    bool hasJpegSignature = (pData[headerSize] == 0xFF && pData[headerSize + 1] == 0xD8);
 
-    if (dataSize <= headerSize) {
-        Console::WriteLine("[MAID] Data too small for header");
+    if (!hasJpegSignature) {
+        // Data might not be filled yet or is invalid
+        // Log first bytes for debugging
+        Console::WriteLine(String::Format("[MAID] GetLiveFrame: No JPEG signature found. First bytes after header: {0:X2} {1:X2}",
+                          pData[headerSize], pData[headerSize + 1]));
         free(stArray.pData);
         return gcnew array<System::Byte>(0);
     }
 
     // Skip header, return only JPEG data
-    ULONG jpegSize = dataSize - headerSize;
+    ULONG jpegSize = bufferSize - headerSize;
     array<System::Byte>^ jpegData = gcnew array<System::Byte>(jpegSize);
     System::Runtime::InteropServices::Marshal::Copy(IntPtr(pData + headerSize), jpegData, 0, jpegSize);
 
-    // Free the native buffer that SDK allocated
     free(stArray.pData);
-
-    Console::WriteLine(String::Format("[MAID] GetLiveFrame returning {0} bytes (total {1} - header {2})",
-                      jpegSize, dataSize, headerSize));
-
     return jpegData;
 }
 

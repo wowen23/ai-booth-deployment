@@ -66,11 +66,6 @@ py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000
 
 Server starts on http://localhost:8000
 
-**Install dependencies:**
-```bash
-py -3.13 -m uvicorn server:app --host 0.0.0.0 --port 8000
-```
-
 ## Development Workflow
 
 ### Startup Sequence
@@ -86,7 +81,20 @@ cd bridge-dotnet/NikonBridge/bin/x64/Release/net8.0
 python server.py
 ```
 
+**Terminal 3 - Cloudflare Tunnel (optional, for public access):**
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
 4. **Open web UI**: http://localhost:8000
+
+### Kill Stuck Processes
+
+If servers fail to start due to port conflicts:
+```powershell
+taskkill /F /IM NikonBridge.exe
+taskkill /F /IM python.exe
+```
 
 ### Camera operation workflow:
 
@@ -101,7 +109,7 @@ python server.py
 
 ### Python Backend (FastAPI)
 
-- **server.py** (529 lines) - Main HTTP server
+- **server.py** - Main HTTP server
   - `/edit` - Apply AI style transformation to uploaded image
   - `/styles` - List available style prompts by category
   - `/prompts` - Create new style prompt file
@@ -151,9 +159,14 @@ python server.py
   - `mode` - Processing mode (background/retheme)
 
 - **.env** (root) - Python server environment
-  - `GOOGLE_API_KEY` - Google AI Studio API key
+  - `GOOGLE_API_KEY` - Google AI Studio API key (required)
   - `APP_ALLOW_ORIGINS` - CORS allowed origins
   - `APP_PIN` - Optional PIN security for /edit endpoint
+  - `SENDGRID_API_KEY` - SendGrid API key (optional, for email delivery)
+  - `FROM_EMAIL` - Verified sender email for SendGrid
+  - `TELNYX_API_KEY` - Telnyx API key (optional, for SMS/MMS delivery)
+  - `TELNYX_PHONE_NUMBER` - Telnyx phone number for sending MMS
+  - `PUBLIC_BASE_URL` - Public URL for QR codes and email links
 
 - **bridge-dotnet/NikonBridge/.env** - Bridge environment
   - `WATCH_DIR` - Where to save captured images
@@ -168,6 +181,18 @@ Styles are text prompt templates stored in `styles/` directory:
 - **styles/retheme/** - Full scene retheme prompts (transform entire image)
 
 Each style is a `.txt` file containing the Gemini prompt. New styles can be created via `/prompts` endpoint or by adding files directly.
+
+## Optional Features
+
+### SMS/MMS Photo Delivery (Telnyx)
+- See `docs/SMS_MMS_SETUP.md` for setup instructions
+- Sends AI-enhanced photos to guests via text message
+- Cost: ~$0.02-0.03 per MMS
+
+### Email Photo Delivery (SendGrid)
+- See `docs/EMAIL_AND_HOSTING_SETUP.md` for setup instructions
+- Free tier: 100 emails/day
+- Requires verified sender email
 
 ## Current Branch: deployment
 
@@ -275,7 +300,11 @@ No automated tests currently exist. Manual testing workflow:
 
 ## Documentation References
 
-- **INSTRUCTIONS.md** - Comprehensive handoff document with SDK integration details (if present in codebase)
+- **docs/START_HERE.md** - Quick start guide for new users
+- **docs/ez_start_instructions.md** - Minimal quick reference
+- **docs/ENVIRONMENT_VARIABLES.md** - Complete environment variable reference
+- **docs/SMS_MMS_SETUP.md** - Telnyx SMS/MMS integration guide
+- **docs/EMAIL_AND_HOSTING_SETUP.md** - SendGrid email and hosting options
 - **docs/SDK_BRIDGE_PLAN.md** - Original bridge architecture plan
 - **docs/PHASE4_WEB_PLAN.md** - Web application design document
 - **Nikon SDK docs** - See S-SDKZ6_2-006BF-ALLIN/Module/Documents/English/

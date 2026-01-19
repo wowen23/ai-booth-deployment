@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NikonBridge")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+90acc37b1f6ba205ef1bb4c06b7aa9de06162fb3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4f39d1276270ea949a797988c0382b6332aec71e")]
 [assembly: System.Reflection.AssemblyProductAttribute("NikonBridge")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NikonBridge")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
