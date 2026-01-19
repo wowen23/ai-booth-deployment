@@ -13,6 +13,47 @@ static LPMAIDEntryPointProc g_pMAIDEntryPoint = nullptr;
 static NkMAIDObject g_moduleObj{};
 static NkMAIDObject g_sourceObj{};
 
+// Completion callback structure (matches SDK sample)
+struct RefCompletionProc {
+    volatile ULONG* pulCount;
+    void* pRef;
+    NKERROR nResult;
+};
+
+// Completion callback - increments counter when operation completes
+static void CALLPASCAL CompletionProc_Generic(
+    LPNkMAIDObject pObject,
+    ULONG ulCommand,
+    ULONG ulParam,
+    ULONG ulDataType,
+    NKPARAM data,
+    NKREF refComplete,
+    NKERROR nResult)
+{
+    if (refComplete != NULL) {
+        RefCompletionProc* pRef = (RefCompletionProc*)refComplete;
+        pRef->nResult = nResult;
+        if (pRef->pulCount != NULL) {
+            (*pRef->pulCount)++;
+        }
+    }
+}
+
+// IdleLoop - pumps Async until completion callback fires
+static bool IdleLoop(LPNkMAIDObject pObject, volatile ULONG* pulCount, ULONG ulEndCount, int maxIterations = 1000)
+{
+    int iterations = 0;
+    while (*pulCount < ulEndCount && iterations < maxIterations) {
+        SLONG result = g_pMAIDEntryPoint(pObject, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        if (result != kNkMAIDResult_NoError && result != kNkMAIDResult_Pending) {
+            break;
+        }
+        Sleep(1);
+        iterations++;
+    }
+    return *pulCount >= ulEndCount;
+}
+
 static std::wstring FormatWin32Error(DWORD err)
 {
     LPWSTR buf = nullptr;
@@ -671,71 +712,73 @@ void MaidBridge::StopLive()
 
 array<System::Byte>^ MaidBridge::GetLiveFrame()
 {
-    if (!liveRunning || pSourceObj == IntPtr::Zero) {
+    if (!liveRunning || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
         return gcnew array<System::Byte>(0);
     }
 
     NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
 
-    // First, pump the SDK async queue to process any pending operations
-    // This is required by the Nikon SDK - call Async to process callbacks
-    CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
-
-    // Step 1: Call CapGet with NULL pData to get the size info
+    // Step 1: Get array info (size) using proper callback pattern
     NkMAIDArray stArray;
     memset(&stArray, 0, sizeof(NkMAIDArray));
 
-    SLONG result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
-                            kNkMAIDDataType_ArrayPtr, &stArray);
+    volatile ULONG ulCount = 0;
+    RefCompletionProc refCompletion;
+    refCompletion.pulCount = &ulCount;
+    refCompletion.pRef = NULL;
+    refCompletion.nResult = 0;
 
-    if (result != kNkMAIDResult_NoError) {
+    SLONG result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
+                                      kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                      (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
+
+    // Wait for completion
+    IdleLoop(pSource, &ulCount, 1);
+
+    if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
         return gcnew array<System::Byte>(0);
     }
 
-    if (stArray.ulElements == 0 || stArray.wPhysicalBytes == 0) {
-        return gcnew array<System::Byte>(0);
-    }
-
-    // Step 2: Allocate buffer based on size from CapGet
+    // Step 2: Allocate buffer
     ULONG bufferSize = stArray.ulElements * stArray.wPhysicalBytes;
     stArray.pData = malloc(bufferSize);
     if (stArray.pData == nullptr) {
         return gcnew array<System::Byte>(0);
     }
 
-    // Step 3: Call CapGetArray to fill the buffer
-    // Note: This returns -127 (NotSupported) on some cameras, but let's try with proper Async pumping
-    result = CallMAID(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
-                      kNkMAIDDataType_ArrayPtr, &stArray);
+    // Step 3: Get array data using proper callback pattern
+    ulCount = 0;
+    refCompletion.pulCount = &ulCount;
+    refCompletion.nResult = 0;
 
-    // Pump async queue after the call
-    for (int i = 0; i < 10 && (result == kNkMAIDResult_Pending || result == kNkMAIDResult_NoError); i++) {
-        CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
-        if (result == kNkMAIDResult_NoError) break;
-        Sleep(10);
-    }
+    result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
+                                kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
+
+    // Wait for completion
+    IdleLoop(pSource, &ulCount, 1);
 
     if (result != kNkMAIDResult_NoError) {
-        // CapGetArray not supported - the data might already be in the buffer from CapGet
-        // with pre-allocated pData. Let's try that approach.
+        // CapGetArray failed - this camera might not support it
+        // Fall back to trying CapGet with pre-allocated buffer
         free(stArray.pData);
 
-        // Retry with pre-allocated buffer approach
         memset(&stArray, 0, sizeof(NkMAIDArray));
-        stArray.pData = malloc(1024 * 1024);  // 1MB buffer
+        stArray.pData = malloc(1024 * 1024);
         if (stArray.pData == nullptr) {
             return gcnew array<System::Byte>(0);
         }
         stArray.ulElements = 1024 * 1024;
 
-        result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
-                          kNkMAIDDataType_ArrayPtr, &stArray);
+        ulCount = 0;
+        refCompletion.pulCount = &ulCount;
+        refCompletion.nResult = 0;
 
-        // Pump async queue
-        for (int i = 0; i < 10; i++) {
-            CallMAID(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL);
-            Sleep(10);
-        }
+        result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
+                                    kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                    (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
+
+        IdleLoop(pSource, &ulCount, 1);
 
         if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
             free(stArray.pData);
@@ -747,26 +790,14 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
 
     // Live view data has 512-byte header followed by JPEG data
     ULONG headerSize = 512;
-
     if (bufferSize <= headerSize) {
         free(stArray.pData);
         return gcnew array<System::Byte>(0);
     }
 
-    // Check for JPEG signature after header (FF D8)
     unsigned char* pData = static_cast<unsigned char*>(stArray.pData);
-    bool hasJpegSignature = (pData[headerSize] == 0xFF && pData[headerSize + 1] == 0xD8);
 
-    if (!hasJpegSignature) {
-        // Data might not be filled yet or is invalid
-        // Log first bytes for debugging
-        Console::WriteLine(String::Format("[MAID] GetLiveFrame: No JPEG signature found. First bytes after header: {0:X2} {1:X2}",
-                          pData[headerSize], pData[headerSize + 1]));
-        free(stArray.pData);
-        return gcnew array<System::Byte>(0);
-    }
-
-    // Skip header, return only JPEG data
+    // Skip header, return JPEG data
     ULONG jpegSize = bufferSize - headerSize;
     array<System::Byte>^ jpegData = gcnew array<System::Byte>(jpegSize);
     System::Runtime::InteropServices::Marshal::Copy(IntPtr(pData + headerSize), jpegData, 0, jpegSize);
