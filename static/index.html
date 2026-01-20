@@ -1670,13 +1670,17 @@
     });
 
     kioskStartLiveBtn.addEventListener('click', async () => {
-      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      console.log('[Kiosk] Start Live button clicked');
       try {
         showKioskStatus('Starting live view...');
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        console.log('[Kiosk] Calling:', bridge + '/sdk/start-live');
         const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        console.log('[Kiosk] Response:', resp.status, resp.ok);
         if (!resp.ok) throw new Error('Start live failed');
         showKioskStatus('Live view started! Click "Open Stream" to view.', 3000);
       } catch (e) {
+        console.error('[Kiosk] Start live error:', e);
         showKioskStatus('Start live error: ' + e.message, 5000);
       }
     });
