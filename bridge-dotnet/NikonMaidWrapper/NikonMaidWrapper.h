@@ -16,6 +16,10 @@ namespace NikonMaidWrapper {
         array<System::String^>^ Shoot(System::String^ watchDir);
         System::String^ TestLiveViewMode();
 
+        // Autofocus - triggers ContrastAF during live view
+        // Returns: 0=success (focused), 1=out of focus, 2=timeout, -1=error
+        int Focus();
+
         // Real-time status check - pings the camera to verify it's responsive
         bool IsConnected();
         bool IsLiveRunning();

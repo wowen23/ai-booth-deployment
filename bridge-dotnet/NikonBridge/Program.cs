@@ -376,6 +376,29 @@ app.MapPost("/sdk/stop-live", () => {
     }
 });
 
+app.MapPost("/sdk/focus", () => {
+    if (!sdk.Connected) return Results.Conflict(new { detail = "Not connected. Call /sdk/connect first." });
+    if (!sdk.LiveRunning) return Results.Conflict(new { detail = "Live view not running. Focus requires live view." });
+    try
+    {
+        if (maid == null) return Results.Problem("MAID wrapper not initialized", statusCode: 500);
+        int result = maid.Focus();
+        // result: 0=success, 1=out of focus, 2=timeout, -1=error
+        string status = result switch
+        {
+            0 => "focused",
+            1 => "out_of_focus",
+            2 => "timeout",
+            _ => "error"
+        };
+        return Results.Json(new { ok = result == 0, status, result });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message, statusCode: 500);
+    }
+});
+
 app.MapGet("/sdk/test-mode", () => {
     if (!sdk.Connected) return Results.Conflict(new { detail = "Not connected. Call /sdk/connect first." });
     try

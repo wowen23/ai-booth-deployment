@@ -854,6 +854,77 @@ void MaidBridge::StopLive()
     liveRunning = false;
 }
 
+// Autofocus using ContrastAF capability (works during live view)
+// Returns: 0=success (focused), 1=out of focus, 2=timeout, -1=error
+int MaidBridge::Focus()
+{
+    Console::WriteLine("[MAID] Focus() called");
+
+    if (!connected || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
+        Console::WriteLine("[MAID] Focus: not connected");
+        return -1;
+    }
+
+    if (!liveRunning) {
+        Console::WriteLine("[MAID] Focus: live view not running (required for ContrastAF)");
+        return -1;
+    }
+
+    NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
+
+    // ContrastAF values:
+    // 0x00 = Start AF
+    // 0x01 = Stop AF
+    // 0x10 = OK (focused)
+    // 0x11 = OutOfFocus
+    // 0x12 = Busy
+    const ULONG kContrastAF_Start = 0x00;
+    const ULONG kContrastAF_OK = 0x10;
+    const ULONG kContrastAF_OutOfFocus = 0x11;
+    const ULONG kContrastAF_Busy = 0x12;
+
+    // Start autofocus
+    Console::WriteLine("[MAID] Starting ContrastAF...");
+    SLONG result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_ContrastAF,
+                                      kNkMAIDDataType_Unsigned, (NKPARAM)kContrastAF_Start, NULL, NULL);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] ContrastAF Start failed: {0}", result));
+        return -1;
+    }
+
+    // Poll for completion (with timeout)
+    int maxAttempts = 100;  // 100 * 50ms = 5 seconds max
+    for (int i = 0; i < maxAttempts; i++) {
+        // Pump async
+        g_pMAIDEntryPoint(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+
+        // Check status
+        ULONG afStatus = 0;
+        result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_ContrastAF,
+                                    kNkMAIDDataType_UnsignedPtr, (NKPARAM)&afStatus, NULL, NULL);
+
+        if (result == kNkMAIDResult_NoError) {
+            if (afStatus == kContrastAF_OK) {
+                Console::WriteLine("[MAID] ContrastAF: Focused successfully!");
+                return 0;
+            } else if (afStatus == kContrastAF_OutOfFocus) {
+                Console::WriteLine("[MAID] ContrastAF: Out of focus (couldn't find focus)");
+                return 1;
+            } else if (afStatus == kContrastAF_Busy) {
+                // Still working, continue polling
+            } else {
+                Console::WriteLine(String::Format("[MAID] ContrastAF: Unknown status {0}", afStatus));
+            }
+        }
+
+        Sleep(50);
+    }
+
+    Console::WriteLine("[MAID] ContrastAF: Timeout");
+    return 2;
+}
+
 array<System::Byte>^ MaidBridge::GetLiveFrame()
 {
     if (!liveRunning || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {

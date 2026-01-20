@@ -424,6 +424,7 @@
           <button id="kioskConnectBtn" class="kiosk-fullscreen-btn">Connect</button>
           <button id="kioskStartLiveBtn" class="kiosk-fullscreen-btn">Start Live</button>
           <button id="kioskOpenStreamBtn" class="kiosk-fullscreen-btn">Open Stream</button>
+          <button id="kioskFocusBtn" class="kiosk-fullscreen-btn">Focus</button>
           <button id="kioskStopLiveBtn" class="kiosk-fullscreen-btn">Stop</button>
           <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Fullscreen</button>
         </div>
@@ -513,6 +514,7 @@
           <button id="btnConnect">Connect Camera</button>
           <button id="btnStartLive">Start Live View</button>
           <button id="btnOpenLive">Open Stream</button>
+          <button id="btnFocus">Focus</button>
           <button id="btnStopLive">Stop</button>
           <button id="btnShoot">Shoot</button>
           <input type="text" id="startFileName" placeholder="e.g. WAO_9999" style="width:150px;margin-left:10px" />
@@ -1017,6 +1019,24 @@
       }
       statusEl.textContent = 'Live view stopped';
     });
+
+    const btnFocus = document.getElementById('btnFocus');
+    btnFocus.addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Focusing...';
+        const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+        const resp = await fetch(bridge + '/sdk/focus', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          statusEl.textContent = 'Focused!';
+        } else {
+          statusEl.textContent = 'Focus result: ' + data.status;
+        }
+      } catch (e) {
+        statusEl.textContent = 'Focus error: ' + e.message;
+      }
+    });
+
     btnShoot.addEventListener('click', async () => {
       try {
         const resp = await fetch('/sdk/shoot', {
@@ -1682,6 +1702,23 @@
       kioskPlaceholder.style.display = 'block';
       kioskLiveStream.style.display = 'none';
       showKioskStatus('Live view stopped', 2000);
+    });
+
+    const kioskFocusBtn = document.getElementById('kioskFocusBtn');
+    kioskFocusBtn.addEventListener('click', async () => {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      try {
+        showKioskStatus('Focusing...');
+        const resp = await fetch(bridge + '/sdk/focus', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          showKioskStatus('Focused!', 2000);
+        } else {
+          showKioskStatus('Focus: ' + data.status, 3000);
+        }
+      } catch (e) {
+        showKioskStatus('Focus error: ' + e.message, 5000);
+      }
     });
 
     // Show status message
