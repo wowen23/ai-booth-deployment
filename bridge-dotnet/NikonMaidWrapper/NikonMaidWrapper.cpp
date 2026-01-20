@@ -54,6 +54,56 @@ static bool IdleLoop(LPNkMAIDObject pObject, volatile ULONG* pulCount, ULONG ulE
     return *pulCount >= ulEndCount;
 }
 
+// Flag to signal when LiveViewImageStatus changes (0x8517)
+static volatile bool g_liveViewStatusChanged = false;
+static volatile ULONG g_lastEventCap = 0;
+
+// EventProc callback for Source object (required by SDK)
+static void CALLPASCAL EventProc_Source(NKREF refProc, ULONG ulEvent, NKPARAM data)
+{
+    // 0x4 = kNkMAIDEvent_CapChange, 0x6 = kNkMAIDEvent_CapChangeValueOnly
+    // 0x8517 = kNkMAIDCapability_LiveViewImageStatus
+    if ((ulEvent == 0x4 || ulEvent == 0x6) && (ULONG)data == 0x8517) {
+        g_liveViewStatusChanged = true;
+        g_lastEventCap = (ULONG)data;
+    }
+    printf("[MAID] EventProc_Source: event=0x%X, data=0x%X\n", ulEvent, (ULONG)data);
+}
+
+// ProgressProc callback (required by SDK)
+static void CALLPASCAL ProgressProc_Generic(ULONG ulCommand, ULONG ulParam, NKREF refProc, ULONG ulDone, ULONG ulTotal)
+{
+    // Only log occasionally to avoid spam
+    static int count = 0;
+    if (count++ % 100 == 0) {
+        printf("[MAID] ProgressProc: cmd=0x%X, param=0x%X, done=%lu/%lu\n", ulCommand, ulParam, ulDone, ulTotal);
+    }
+}
+
+// Set up required callbacks on an object
+static bool SetupCallbacks(LPNkMAIDObject pObject)
+{
+    if (g_pMAIDEntryPoint == nullptr || pObject == nullptr) return false;
+
+    NkMAIDCallback stProc;
+    SLONG result;
+
+    // Set EventProc
+    stProc.refProc = (NKREF)pObject;
+    stProc.pProc = (LPNKFUNC)EventProc_Source;
+    result = g_pMAIDEntryPoint(pObject, kNkMAIDCommand_CapSet, kNkMAIDCapability_EventProc,
+                                kNkMAIDDataType_CallbackPtr, (NKPARAM)&stProc, NULL, NULL);
+    printf("[MAID] SetupCallbacks: EventProc set result=%ld\n", result);
+
+    // Set ProgressProc
+    stProc.pProc = (LPNKFUNC)ProgressProc_Generic;
+    result = g_pMAIDEntryPoint(pObject, kNkMAIDCommand_CapSet, kNkMAIDCapability_ProgressProc,
+                                kNkMAIDDataType_CallbackPtr, (NKPARAM)&stProc, NULL, NULL);
+    printf("[MAID] SetupCallbacks: ProgressProc set result=%ld\n", result);
+
+    return true;
+}
+
 static std::wstring FormatWin32Error(DWORD err)
 {
     LPWSTR buf = nullptr;
@@ -377,6 +427,10 @@ bool MaidBridge::EnumerateAndOpenCamera()
     pSourceObj = IntPtr(pSrc);
     Console::WriteLine("[MAID] Camera opened successfully");
 
+    // Set up required callbacks on source object (EventProc, ProgressProc)
+    Console::WriteLine("[MAID] Setting up callbacks on source object...");
+    SetupCallbacks(pSrc);
+
     return true;
 }
 
@@ -644,6 +698,8 @@ bool MaidBridge::StartLive()
                 if (pCapInfo[i].ulID == kNkMAIDCapability_GetLiveViewImage) {
                     foundLiveViewImage = true;
                     Console::WriteLine(String::Format("[MAID] Found GetLiveViewImage at index {0}", i));
+                    Console::WriteLine(String::Format("[MAID]   Type={0}, Operations=0x{1:X} (Get=0x2, GetArray=0x8)",
+                                      pCapInfo[i].ulType, pCapInfo[i].ulOperations));
                 }
                 if (pCapInfo[i].ulID == kNkMAIDCapability_LiveViewSelector) {
                     foundLiveViewSelector = true;
@@ -761,43 +817,21 @@ bool MaidBridge::StartLive()
         Console::WriteLine(String::Format("[MAID] Warning: Could not set LiveViewStatus: error {0}", result));
     }
 
-    // Try to get a live view frame
-    // Since GetLiveViewImage only supports CapGet (not CapGetArray),
-    // maybe CapGet returns the full data directly?
-    Console::WriteLine("[MAID] Getting live view image with CapGet...");
-    NkMAIDArray stArray;
-    memset(&stArray, 0, sizeof(NkMAIDArray));
+    // Give camera a moment to process the live view state change
+    Console::WriteLine("[MAID] Waiting for camera to initialize live view...");
+    Sleep(200);
 
-    // Allocate buffer BEFORE calling CapGet
-    ULONG bufferSize = 1024 * 1024; // Start with 1MB buffer
-    stArray.pData = malloc(bufferSize);
-    if (stArray.pData == nullptr) {
-        Console::WriteLine("[MAID] Failed to allocate memory for live view image");
-        return false;
-    }
-    stArray.ulElements = bufferSize;
-
-    result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
-                      kNkMAIDDataType_ArrayPtr, &stArray);
-    Console::WriteLine(String::Format("[MAID] GetLiveViewImage CapGet: result={0}", result));
-    Console::WriteLine(String::Format("[MAID] Array info - ulElements={0}, wPhysicalBytes={1}, pData={2}",
-                      stArray.ulElements, stArray.wPhysicalBytes,
-                      (stArray.pData != nullptr ? "not null" : "null")));
-
-    if (result == kNkMAIDResult_NoError && stArray.pData != nullptr && stArray.ulElements > 0) {
-        Console::WriteLine(String::Format("[MAID] SUCCESS! Got {0} bytes of live view data!", stArray.ulElements));
-        liveRunning = true;
-        free(stArray.pData);
-        return true;
+    // Pump Async to let camera process
+    for (int i = 0; i < 5; i++) {
+        g_pMAIDEntryPoint(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        Sleep(20);
     }
 
-    if (stArray.pData != nullptr) {
-        free(stArray.pData);
-    }
-    Console::WriteLine(String::Format("[MAID] Failed to get live view image: error {0}", result));
-
-    Console::WriteLine(String::Format("[MAID] Live view failed: error {0}", result));
-    return false;
+    // Don't try to get a test frame here - it may interfere with subsequent GetLiveFrame calls
+    // Just mark live view as running and let GetLiveFrame handle actual frame acquisition
+    Console::WriteLine("[MAID] Live view mode set. Marking as running - GetLiveFrame will fetch actual frames.");
+    liveRunning = true;
+    return true;
 }
 
 void MaidBridge::StopLive()
@@ -822,117 +856,78 @@ void MaidBridge::StopLive()
 
 array<System::Byte>^ MaidBridge::GetLiveFrame()
 {
-    // Log why we might return empty
-    if (!liveRunning) {
-        // Only log occasionally to avoid spam
-        static int skipCount = 0;
-        if (skipCount++ % 100 == 0) {
-            Console::WriteLine("[MAID] GetLiveFrame: liveRunning is false");
-        }
-        return gcnew array<System::Byte>(0);
-    }
-    if (pSourceObj == IntPtr::Zero) {
-        Console::WriteLine("[MAID] GetLiveFrame: pSourceObj is null");
-        return gcnew array<System::Byte>(0);
-    }
-    if (g_pMAIDEntryPoint == nullptr) {
-        Console::WriteLine("[MAID] GetLiveFrame: g_pMAIDEntryPoint is null");
+    if (!liveRunning || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
         return gcnew array<System::Byte>(0);
     }
 
     NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
+    static int frameAttempts = 0;
+    frameAttempts++;
 
-    // Step 1: Get array info (size) using proper callback pattern
+    // === PHASE 1: Get array metadata with completion callback ===
     NkMAIDArray stArray;
     memset(&stArray, 0, sizeof(NkMAIDArray));
 
-    volatile ULONG ulCount = 0;
-    RefCompletionProc refCompletion;
-    refCompletion.pulCount = &ulCount;
-    refCompletion.pRef = NULL;
-    refCompletion.nResult = 0;
+    volatile ULONG ulCount1 = 0;
+    RefCompletionProc refProc1;
+    refProc1.pulCount = &ulCount1;
+    refProc1.pRef = NULL;
+    refProc1.nResult = 0;
 
-    SLONG result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
-                                      kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
-                                      (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
+    SLONG result1 = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
+                                       kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                       (LPNKFUNC)CompletionProc_Generic, (NKREF)&refProc1);
 
-    // Wait for completion
-    IdleLoop(pSource, &ulCount, 1);
+    // Wait for Phase 1 completion
+    IdleLoop(pSource, &ulCount1, 1, 200);
 
-    if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
-        // Log occasionally to avoid spam
-        static int failCount = 0;
-        if (failCount++ % 50 == 0) {
-            Console::WriteLine(String::Format("[MAID] GetLiveFrame: CapGet failed, result={0}, elements={1}", result, stArray.ulElements));
+    if (result1 != 0 || stArray.ulElements == 0) {
+        if (frameAttempts <= 5) {
+            Console::WriteLine(String::Format("[MAID] GetLiveFrame #{0}: Phase1 failed, result={1}, elements={2}",
+                frameAttempts, result1, stArray.ulElements));
         }
         return gcnew array<System::Byte>(0);
     }
 
-    // Step 2: Allocate buffer
-    ULONG bufferSize = stArray.ulElements * stArray.wPhysicalBytes;
-    stArray.pData = malloc(bufferSize);
+    // === PHASE 2: Allocate buffer and get actual data with CapGetArray ===
+    ULONG bufSize = stArray.ulElements * (stArray.wPhysicalBytes > 0 ? stArray.wPhysicalBytes : 1);
+    stArray.pData = malloc(bufSize);
     if (stArray.pData == nullptr) {
         return gcnew array<System::Byte>(0);
     }
 
-    // Step 3: Get array data using proper callback pattern
-    ulCount = 0;
-    refCompletion.pulCount = &ulCount;
-    refCompletion.nResult = 0;
+    volatile ULONG ulCount2 = 0;
+    RefCompletionProc refProc2;
+    refProc2.pulCount = &ulCount2;
+    refProc2.pRef = NULL;
+    refProc2.nResult = 0;
 
-    result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
-                                kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
-                                (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
+    SLONG result2 = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGetArray, kNkMAIDCapability_GetLiveViewImage,
+                                       kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                       (LPNKFUNC)CompletionProc_Generic, (NKREF)&refProc2);
 
-    // Wait for completion
-    IdleLoop(pSource, &ulCount, 1);
-
-    if (result != kNkMAIDResult_NoError) {
-        // CapGetArray failed - this camera might not support it
-        // Fall back to trying CapGet with pre-allocated buffer
-        free(stArray.pData);
-
-        memset(&stArray, 0, sizeof(NkMAIDArray));
-        stArray.pData = malloc(1024 * 1024);
-        if (stArray.pData == nullptr) {
-            return gcnew array<System::Byte>(0);
-        }
-        stArray.ulElements = 1024 * 1024;
-
-        ulCount = 0;
-        refCompletion.pulCount = &ulCount;
-        refCompletion.nResult = 0;
-
-        result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_GetLiveViewImage,
-                                    kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
-                                    (LPNKFUNC)CompletionProc_Generic, (NKREF)&refCompletion);
-
-        IdleLoop(pSource, &ulCount, 1);
-
-        if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
-            free(stArray.pData);
-            return gcnew array<System::Byte>(0);
-        }
-
-        bufferSize = stArray.ulElements * stArray.wPhysicalBytes;
-    }
-
-    // Live view data has 512-byte header followed by JPEG data
-    ULONG headerSize = 512;
-    if (bufferSize <= headerSize) {
-        free(stArray.pData);
-        return gcnew array<System::Byte>(0);
-    }
+    // Wait for Phase 2 completion - THIS IS WHERE DATA ARRIVES
+    IdleLoop(pSource, &ulCount2, 1, 200);
 
     unsigned char* pData = static_cast<unsigned char*>(stArray.pData);
 
-    // Skip header, return JPEG data
-    ULONG jpegSize = bufferSize - headerSize;
-    array<System::Byte>^ jpegData = gcnew array<System::Byte>(jpegSize);
-    System::Runtime::InteropServices::Marshal::Copy(IntPtr(pData + headerSize), jpegData, 0, jpegSize);
+    if (frameAttempts <= 10) {
+        Console::WriteLine(String::Format("[MAID] GetLiveFrame #{0}: Phase2 result={1}, callback={2}, @512: {3:X2} {4:X2}",
+            frameAttempts, result2, ulCount2, pData[512], pData[513]));
+    }
+
+    // Check for valid JPEG data at offset 512 (after header)
+    if (pData[512] == 0xFF && pData[513] == 0xD8) {
+        ULONG headerSize = 512;
+        ULONG jpegSize = stArray.ulElements - headerSize;
+        array<System::Byte>^ jpegData = gcnew array<System::Byte>(jpegSize);
+        System::Runtime::InteropServices::Marshal::Copy(IntPtr(pData + headerSize), jpegData, 0, jpegSize);
+        free(stArray.pData);
+        return jpegData;
+    }
 
     free(stArray.pData);
-    return jpegData;
+    return gcnew array<System::Byte>(0);
 }
 
 // Helper structure for capture context (native, not managed)
@@ -1249,76 +1244,175 @@ array<System::String^>^ MaidBridge::Shoot(System::String^ watchDir)
 
 System::String^ MaidBridge::TestLiveViewMode()
 {
-    Console::WriteLine("[MAID] TestLiveViewMode() called");
+    Console::WriteLine("[MAID] ========== TestLiveViewMode() STANDALONE TEST ==========");
 
-    if (!connected) {
-        return "ERROR: Not connected";
-    }
-
-    if (pSourceObj == IntPtr::Zero) {
-        return "ERROR: No source object";
+    if (!connected || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
+        return "ERROR: Not connected or no entry point";
     }
 
     NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
     System::Text::StringBuilder^ sb = gcnew System::Text::StringBuilder();
+    SLONG result;
 
-    // Try reading LiveViewStatus as Unsigned
-    sb->AppendLine("=== Testing LiveViewStatus ===");
-    ULONG statusUnsigned = 99;
-    SLONG result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_LiveViewStatus,
-                            kNkMAIDDataType_Unsigned, &statusUnsigned);
-    sb->AppendLine(String::Format("CapGet as Unsigned: result={0}, value={1}", result, statusUnsigned));
+    sb->AppendLine("=== STEP 1: Set LiveViewStatus to OFF (0) ===");
+    result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
+                                kNkMAIDDataType_Unsigned, (NKPARAM)0, NULL, NULL);
+    sb->AppendLine(String::Format("CapSet(0): result={0}", result));
+    Sleep(200);
 
-    // Try reading LiveViewStatus as Enum
-    NkMAIDEnum stEnum;
-    memset(&stEnum, 0, sizeof(NkMAIDEnum));
-    result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_LiveViewStatus,
-                      kNkMAIDDataType_EnumPtr, &stEnum);
-    sb->AppendLine(String::Format("CapGet as Enum: result={0}", result));
-    if (result == 0 && stEnum.pData != nullptr) {
-        sb->AppendLine(String::Format("  Current value: {0}", stEnum.ulValue));
-        sb->AppendLine(String::Format("  Valid values ({0}):", stEnum.ulElements));
-        ULONG* pValues = (ULONG*)stEnum.pData;
-        for (ULONG i = 0; i < stEnum.ulElements; i++) {
-            sb->AppendLine(String::Format("    [{0}] = {1}", i, pValues[i]));
-        }
+    sb->AppendLine("\n=== STEP 2: Set LiveViewStatus to RemoteLV (3) ===");
+    result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
+                                kNkMAIDDataType_Unsigned, (NKPARAM)3, NULL, NULL);
+    sb->AppendLine(String::Format("CapSet(3): result={0}", result));
+
+    sb->AppendLine("\n=== STEP 3: Wait 1 second for camera ===");
+    Sleep(1000);
+
+    sb->AppendLine("\n=== STEP 4: Pump Async 20 times ===");
+    for (int i = 0; i < 20; i++) {
+        result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+        Sleep(50);
+    }
+    sb->AppendLine("Done pumping async");
+
+    sb->AppendLine("\n=== STEP 5: Check LiveViewImageStatus (0x8517) using EnumPtr ===");
+    {
+        // LiveViewImageStatus is an enum type - must use NkMAIDEnum structure
+        // kNkMAIDLiveViewImageStatus: 0=CannotAcquire, 1=CanAcquire
+        NkMAIDEnum stEnum;
+        memset(&stEnum, 0, sizeof(NkMAIDEnum));
+
+        result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, 0x8517,  // LiveViewImageStatus
+                                    kNkMAIDDataType_EnumPtr, (NKPARAM)&stEnum,
+                                    NULL, NULL);
+        sb->AppendLine(String::Format("LiveViewImageStatus: result={0}, ulValue={1}, ulElements={2}, ulType={3}",
+            result, stEnum.ulValue, stEnum.ulElements, stEnum.ulType));
+        sb->AppendLine("  (ulValue: 0=CannotAcquire, 1=CanAcquire)");
     }
 
-    // Try reading LiveViewSelector
-    sb->AppendLine("\n=== Testing LiveViewSelector ===");
-    ULONG selector = 99;
-    result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_LiveViewSelector,
-                      kNkMAIDDataType_Unsigned, &selector);
-    sb->AppendLine(String::Format("CapGet as Unsigned: result={0}, value={1}", result, selector));
+    sb->AppendLine("\n=== STEP 6: Wait for LiveViewImageStatus event and check ===");
+    {
+        g_liveViewStatusChanged = false;
 
-    // Check GetLiveViewImage capability operations
-    sb->AppendLine("\n=== Checking GetLiveViewImage Capability ===");
-    ULONG capCount = 0;
-    result = CallMAID(pSource, kNkMAIDCommand_GetCapCount, 0, kNkMAIDDataType_UnsignedPtr, &capCount);
-    if (result == 0 && capCount > 0) {
-        NkMAIDCapInfo* pCapInfo = new NkMAIDCapInfo[capCount];
-        result = CallMAID(pSource, kNkMAIDCommand_GetCapInfo, capCount, kNkMAIDDataType_CapInfoPtr, pCapInfo);
-        if (result == 0) {
-            for (ULONG i = 0; i < capCount; i++) {
-                if (pCapInfo[i].ulID == kNkMAIDCapability_GetLiveViewImage) {
-                    sb->AppendLine(String::Format("Found GetLiveViewImage:"));
-                    sb->AppendLine(String::Format("  Type: {0}", pCapInfo[i].ulType));
-                    sb->AppendLine(String::Format("  Operations: {0} (hex: 0x{1:X})",
-                                                  pCapInfo[i].ulOperations,
-                                                  pCapInfo[i].ulOperations));
-                    sb->AppendLine("  Operation bits:");
-                    if (pCapInfo[i].ulOperations & 0x0001) sb->AppendLine("    - Start (0x01)");
-                    if (pCapInfo[i].ulOperations & 0x0002) sb->AppendLine("    - Get (0x02)");
-                    if (pCapInfo[i].ulOperations & 0x0004) sb->AppendLine("    - Set (0x04)");
-                    if (pCapInfo[i].ulOperations & 0x0008) sb->AppendLine("    - GetArray (0x08)");
-                    if (pCapInfo[i].ulOperations & 0x0010) sb->AppendLine("    - GetDefault (0x10)");
-                    break;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            // Pump async and wait for status change event
+            for (int i = 0; i < 50; i++) {
+                g_pMAIDEntryPoint(pSource, kNkMAIDCommand_Async, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+                Sleep(20);
+                if (g_liveViewStatusChanged) break;
+            }
+
+            // Check status using correct enum data type
+            NkMAIDEnum stEnum;
+            memset(&stEnum, 0, sizeof(NkMAIDEnum));
+            result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, 0x8517,
+                                        kNkMAIDDataType_EnumPtr, (NKPARAM)&stEnum,
+                                        NULL, NULL);
+
+            sb->AppendLine(String::Format("Attempt {0}: eventFired={1}, result={2}, status={3}",
+                attempt + 1, g_liveViewStatusChanged, result, stEnum.ulValue));
+
+            // If status is CanAcquire (1), try to read frame using proper async pattern
+            if (stEnum.ulValue == 1) {
+                sb->AppendLine("  Status=CanAcquire, attempting to read frame with completion callback...");
+
+                // Phase 1: Get array metadata with completion callback
+                NkMAIDArray stArray;
+                memset(&stArray, 0, sizeof(NkMAIDArray));
+
+                volatile ULONG ulCount1 = 0;
+                RefCompletionProc refProc1;
+                refProc1.pulCount = &ulCount1;
+                refProc1.pRef = NULL;
+                refProc1.nResult = 0;
+
+                SLONG phase1Result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, 0x8247,
+                                            kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                            (LPNKFUNC)CompletionProc_Generic, (NKREF)&refProc1);
+
+                // Wait for completion
+                IdleLoop(pSource, &ulCount1, 1, 500);
+
+                sb->AppendLine(String::Format("  Phase1 (CapGet metadata): result={0}, callback={1}, elements={2}, physBytes={3}",
+                    phase1Result, ulCount1, stArray.ulElements, stArray.wPhysicalBytes));
+
+                if (phase1Result == 0 && stArray.ulElements > 0) {
+                    // Phase 2: Allocate buffer and try CapGetArray
+                    ULONG bufSize = stArray.ulElements * (stArray.wPhysicalBytes > 0 ? stArray.wPhysicalBytes : 1);
+                    stArray.pData = malloc(bufSize);
+                    memset(stArray.pData, 0xDD, bufSize);
+
+                    volatile ULONG ulCount2 = 0;
+                    RefCompletionProc refProc2;
+                    refProc2.pulCount = &ulCount2;
+                    refProc2.pRef = NULL;
+                    refProc2.nResult = 0;
+
+                    SLONG phase2Result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGetArray, 0x8247,
+                                                kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                                (LPNKFUNC)CompletionProc_Generic, (NKREF)&refProc2);
+
+                    // Wait for completion
+                    IdleLoop(pSource, &ulCount2, 1, 500);
+
+                    unsigned char* pData = (unsigned char*)stArray.pData;
+                    int modified = 0;
+                    for (ULONG i = 0; i < 100 && i < bufSize; i++) {
+                        if (pData[i] != 0xDD) modified++;
+                    }
+
+                    sb->AppendLine(String::Format("  Phase2 (CapGetArray): result={0}, callback={1}, callbackResult={2}",
+                        phase2Result, ulCount2, refProc2.nResult));
+                    sb->AppendLine(String::Format("  Modified bytes in first 100: {0}", modified));
+                    sb->AppendLine(String::Format("  First 8: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2}",
+                        pData[0], pData[1], pData[2], pData[3], pData[4], pData[5], pData[6], pData[7]));
+                    sb->AppendLine(String::Format("  @512: {0:X2} {1:X2} {2:X2} {3:X2}",
+                        pData[512], pData[513], pData[514], pData[515]));
+
+                    // If CapGetArray failed, try just CapGet with pre-allocated buffer + completion
+                    if (phase2Result != 0 || modified == 0) {
+                        sb->AppendLine("  CapGetArray failed or no data, trying CapGet with buffer...");
+                        memset(stArray.pData, 0xEE, bufSize);
+
+                        volatile ULONG ulCount3 = 0;
+                        RefCompletionProc refProc3;
+                        refProc3.pulCount = &ulCount3;
+                        refProc3.pRef = NULL;
+                        refProc3.nResult = 0;
+
+                        SLONG phase3Result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, 0x8247,
+                                                    kNkMAIDDataType_ArrayPtr, (NKPARAM)&stArray,
+                                                    (LPNKFUNC)CompletionProc_Generic, (NKREF)&refProc3);
+
+                        IdleLoop(pSource, &ulCount3, 1, 500);
+
+                        modified = 0;
+                        for (ULONG i = 0; i < 100 && i < bufSize; i++) {
+                            if (pData[i] != 0xEE) modified++;
+                        }
+
+                        sb->AppendLine(String::Format("  Phase3 (CapGet with buffer): result={0}, callback={1}, modified={2}",
+                            phase3Result, ulCount3, modified));
+                        sb->AppendLine(String::Format("  First 8: {0:X2} {1:X2} {2:X2} {3:X2} {4:X2} {5:X2} {6:X2} {7:X2}",
+                            pData[0], pData[1], pData[2], pData[3], pData[4], pData[5], pData[6], pData[7]));
+                    }
+
+                    free(stArray.pData);
                 }
             }
+
+            g_liveViewStatusChanged = false;
         }
-        delete[] pCapInfo;
     }
 
+    sb->AppendLine("\n=== STEP 7: Done with tests ===");
+
+    sb->AppendLine("\n=== STEP 8: Set LiveViewStatus back to OFF ===");
+    result = g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
+                                kNkMAIDDataType_Unsigned, (NKPARAM)0, NULL, NULL);
+    sb->AppendLine(String::Format("CapSet(0): result={0}", result));
+
+    Console::WriteLine("[MAID] ========== TestLiveViewMode() COMPLETE ==========");
     return sb->ToString();
 }
 

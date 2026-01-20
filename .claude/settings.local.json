@@ -47,7 +47,10 @@
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64 -t:Rebuild)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64 -t:Rebuild)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64 -t:Build)",
-      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64 -v:minimal)"
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64 -v:minimal)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" NikonBridge.sln -p:Configuration=Release -p:Platform=x64 -t:Rebuild)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" -p:Configuration=Release -p:Platform=x64)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Users\\\\willi\\\\image_gen_deploy\\\\bridge-dotnet\\\\NikonBridge\\\\NikonBridge.sln\" /p:Configuration=Release /p:Platform=x64 /t:Rebuild /v:minimal)"
     ],
     "deny": [],
     "ask": []
