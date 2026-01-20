@@ -57,14 +57,41 @@ catch (Exception ex)
     logger.LogWarning("Failed to initialize MAID wrapper: {Error}. SDK features will not be available.", ex.Message);
 }
 
-app.MapGet("/status", () => Results.Json(new {
-    ok = true,
-    connected = sdk.Connected,
-    live = sdk.LiveRunning,
-    watch_dir = sdk.WatchDir,
-    fps = sdk.Fps,
-    nikon_dlls = sdk.DllStatus
-}));
+app.MapGet("/status", () => {
+    // Do a real check of camera connection status instead of returning cached state
+    bool realConnected = false;
+    bool realLive = false;
+
+    if (maid != null)
+    {
+        try
+        {
+            realConnected = maid.IsConnected();
+            if (realConnected)
+            {
+                realLive = maid.IsLiveRunning();
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Status check failed: {Error}", ex.Message);
+            realConnected = false;
+            realLive = false;
+        }
+
+        // Sync SdkStub state with real state
+        sdk.SyncState(realConnected, realLive);
+    }
+
+    return Results.Json(new {
+        ok = true,
+        connected = realConnected,
+        live = realLive,
+        watch_dir = sdk.WatchDir,
+        fps = sdk.Fps,
+        nikon_dlls = sdk.DllStatus
+    });
+});
 
 app.MapGet("/live.mjpg", async context => {
     if (!sdk.LiveRunning)
@@ -240,16 +267,42 @@ app.MapPost("/retry-copy", async (HttpContext context) =>
 app.MapPost("/sdk/connect", () => {
     try
     {
+        logger.LogInformation("=== /sdk/connect called ===");
         if (maid == null)
         {
+            logger.LogError("MAID wrapper is null");
             return Results.Problem("MAID wrapper not initialized. Check that all Nikon SDK DLLs are present.", statusCode: 500);
         }
+
+        // Always disconnect first to clear cached state and force fresh enumeration
+        logger.LogInformation("Disconnecting first to clear cached state...");
+        try { maid.Disconnect(); } catch { /* ignore */ }
+        sdk.Disconnect();
+
+        logger.LogInformation("Calling maid.Connect()...");
         var ok = maid.Connect();
-        if (ok) sdk.Connect();
+        logger.LogInformation("maid.Connect() returned: {Ok}", ok);
+
+        if (ok)
+        {
+            // Verify the camera actually responds after Connect() claims success
+            logger.LogInformation("Calling maid.IsConnected() to verify...");
+            var reallyConnected = maid.IsConnected();
+            logger.LogInformation("maid.IsConnected() returned: {Connected}", reallyConnected);
+
+            if (!reallyConnected)
+            {
+                logger.LogWarning("Connect() succeeded but IsConnected() failed - camera not responding");
+                maid.Disconnect();
+                return Results.Problem("Camera not responding. Make sure camera is powered on and connected via USB.", statusCode: 503);
+            }
+            sdk.Connect();
+        }
         return Results.Json(new { ok = ok, connected = ok });
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Exception in /sdk/connect");
         return Results.Problem(ex.Message, statusCode: 500);
     }
 });
@@ -635,15 +688,20 @@ class SdkStub
 
     public void Connect()
     {
-        // TODO: initialize MAID, open camera; for now just flag
         Connected = true;
     }
 
     public void Disconnect()
     {
-        // TODO: shutdown MAID
         LiveRunning = false;
         Connected = false;
+    }
+
+    // Sync cached state with real camera state (called by /status)
+    public void SyncState(bool realConnected, bool realLive)
+    {
+        Connected = realConnected;
+        LiveRunning = realLive;
     }
 
     public void StartLive()

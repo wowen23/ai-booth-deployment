@@ -288,8 +288,17 @@ bool MaidBridge::EnumerateAndOpenCamera()
 
     Console::WriteLine(String::Format("[MAID] Module object pointer: 0x{0:X}", (unsigned long long)pMod));
 
-    // Try to get camera list directly (skip complex async for now)
-    // Note: This may return empty list if cameras haven't been enumerated yet
+    // IMPORTANT: Call EnumChildren first to force SDK to scan for connected cameras
+    // Without this, the SDK may return stale/cached camera list
+    Console::WriteLine("[MAID] Calling EnumChildren to refresh camera list...");
+    SLONG enumResult = g_pMAIDEntryPoint(pMod, kNkMAIDCommand_EnumChildren, 0, kNkMAIDDataType_Null, NULL, NULL, NULL);
+    Console::WriteLine(String::Format("[MAID] EnumChildren returned: {0}", enumResult));
+
+    // Don't fail on EnumChildren error - some SDK configs don't require it
+    // We'll check the actual camera count next
+    if (enumResult != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Warning: EnumChildren returned {0}, continuing anyway...", enumResult));
+    }
 
     // Get list of children (cameras)
     Console::WriteLine("[MAID] Getting camera list (Children capability)...");
@@ -499,6 +508,78 @@ void MaidBridge::Disconnect()
     if (hNkdPTP     != IntPtr::Zero) { ::FreeLibrary(static_cast<HMODULE>(hNkdPTP.ToPointer()));     hNkdPTP = IntPtr::Zero; }
     connected = false;
     liveRunning = false;
+}
+
+// Real-time check if camera is actually connected and responding
+bool MaidBridge::IsConnected()
+{
+    // Quick check of cached state first
+    if (!connected) {
+        return false;
+    }
+
+    // Check if we have valid objects
+    if (pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
+        Console::WriteLine("[MAID] IsConnected: No source object or entry point - marking disconnected");
+        connected = false;
+        liveRunning = false;
+        return false;
+    }
+
+    NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
+
+    // Try to query a simple capability to verify camera is responsive
+    // We'll use GetCapCount which should always work on a valid source
+    ULONG capCount = 0;
+    SLONG result = CallMAID(pSource, kNkMAIDCommand_GetCapCount, 0, kNkMAIDDataType_UnsignedPtr, &capCount);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] IsConnected: GetCapCount failed with error {0} - camera disconnected", result));
+        connected = false;
+        liveRunning = false;
+        return false;
+    }
+
+    // Camera responded - it's connected
+    return true;
+}
+
+// Real-time check if live view is actually running
+bool MaidBridge::IsLiveRunning()
+{
+    // Quick check of cached state first
+    if (!liveRunning || !connected) {
+        return false;
+    }
+
+    // Verify camera is still connected
+    if (!IsConnected()) {
+        return false;
+    }
+
+    NkMAIDObject* pSource = static_cast<NkMAIDObject*>(pSourceObj.ToPointer());
+
+    // Check LiveViewStatus capability to see if live view is actually running
+    NkMAIDEnum stEnum;
+    memset(&stEnum, 0, sizeof(NkMAIDEnum));
+    SLONG result = CallMAID(pSource, kNkMAIDCommand_CapGet, kNkMAIDCapability_LiveViewStatus,
+                            kNkMAIDDataType_EnumPtr, &stEnum);
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] IsLiveRunning: LiveViewStatus query failed with error {0}", result));
+        liveRunning = false;
+        return false;
+    }
+
+    // Check if live view is actually on (value 3 = Remote Live View)
+    // Values: 0=OFF, 1=ON, 2=ON_Menu, 3=ON_RemoteLV, 4=ON_CameraLV
+    if (stEnum.ulValue == 0) {
+        Console::WriteLine("[MAID] IsLiveRunning: LiveViewStatus is 0 (OFF) - marking stopped");
+        liveRunning = false;
+        return false;
+    }
+
+    return true;
 }
 
 bool MaidBridge::StartLive()

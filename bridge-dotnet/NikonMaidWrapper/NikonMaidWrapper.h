@@ -16,6 +16,14 @@ namespace NikonMaidWrapper {
         array<System::String^>^ Shoot(System::String^ watchDir);
         System::String^ TestLiveViewMode();
 
+        // Real-time status check - pings the camera to verify it's responsive
+        bool IsConnected();
+        bool IsLiveRunning();
+
+        // Read-only properties for cached state (use IsConnected() for real check)
+        property bool Connected { bool get() { return connected; } }
+        property bool LiveRunning { bool get() { return liveRunning; } }
+
     private:
         System::IntPtr hNkdPTP;
         System::IntPtr hDnssd;

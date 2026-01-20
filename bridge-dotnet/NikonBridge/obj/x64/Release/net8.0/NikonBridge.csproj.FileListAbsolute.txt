@@ -8,7 +8,6 @@ C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0\Microsoft.Extensions.Configuration.Binder.dll
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0\SixLabors.ImageSharp.dll
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0\Sprache.dll
-C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0\NikonMaidWrapper.pdb
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\NikonBridge.csproj.AssemblyReference.cache
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\rpswa.dswa.cache.json
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\NikonBridge.GeneratedMSBuildEditorConfig.editorconfig
@@ -31,3 +30,4 @@ C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\NikonBridge.pdb
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\NikonBridge.genruntimeconfig.cache
 C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\obj\x64\Release\net8.0\ref\NikonBridge.dll
+C:\Users\willi\image_gen_deploy\bridge-dotnet\NikonBridge\bin\x64\Release\net8.0\NikonMaidWrapper.pdb
