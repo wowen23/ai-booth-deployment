@@ -226,6 +226,32 @@ Main differences from master:
 - **Data events**: Async callbacks for image downloads and live view frames
 - **Live view**: Special mode for real-time preview, separate from capture mode
 
+### Critical SDK Patterns (MUST READ)
+
+**1. Async Completion Callbacks + IdleLoop**
+The SDK writes data ASYNCHRONOUSLY. You MUST use completion callbacks:
+```cpp
+volatile ULONG ulCount = 0;
+RefCompletionProc refProc = { &ulCount, NULL, 0 };
+
+g_pMAIDEntryPoint(pSource, kNkMAIDCommand_CapGet, capID,
+    dataType, (NKPARAM)&data,
+    (LPNKFUNC)CompletionProc, (NKREF)&refProc);
+
+// MUST pump Async until callback fires!
+IdleLoop(pSource, &ulCount, 1, 500);
+```
+
+**2. Two-Phase Array Pattern (for GetLiveViewImage, etc.)**
+- Phase 1: `CapGet` returns metadata (elements, physicalBytes) - no data yet
+- Phase 2: `CapGetArray` fills the allocated buffer with actual data
+- Both phases need completion callbacks!
+
+**3. Enum Capabilities Need NkMAIDEnum**
+Use `kNkMAIDDataType_EnumPtr` with `NkMAIDEnum` struct, not `UnsignedPtr`.
+
+See `docs/HOW_WE_FIXED_SDK_WRITING_ISSUE.md` for the full story.
+
 ## Troubleshooting
 
 ### Bridge won't start
@@ -307,4 +333,6 @@ No automated tests currently exist. Manual testing workflow:
 - **docs/EMAIL_AND_HOSTING_SETUP.md** - SendGrid email and hosting options
 - **docs/SDK_BRIDGE_PLAN.md** - Original bridge architecture plan
 - **docs/PHASE4_WEB_PLAN.md** - Web application design document
+- **docs/HOW_WE_FIXED_SDK_WRITING_ISSUE.md** - Critical SDK async pattern fix (MUST READ for SDK work)
+- **docs/SDK_IMPLEMENTATION_PROGRESS.md** - SDK integration milestones and learnings
 - **Nikon SDK docs** - See S-SDKZ6_2-006BF-ALLIN/Module/Documents/English/
