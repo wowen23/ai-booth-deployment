@@ -60,33 +60,32 @@ catch (Exception ex)
 app.MapGet("/status", () => {
     // Do a real check of camera connection status instead of returning cached state
     bool realConnected = false;
-    bool realLive = false;
 
     if (maid != null)
     {
         try
         {
             realConnected = maid.IsConnected();
-            if (realConnected)
-            {
-                realLive = maid.IsLiveRunning();
-            }
         }
         catch (Exception ex)
         {
             logger.LogWarning("Status check failed: {Error}", ex.Message);
             realConnected = false;
-            realLive = false;
         }
 
-        // Sync SdkStub state with real state
-        sdk.SyncState(realConnected, realLive);
+        // Only sync connection state, NOT live state
+        // Live state is managed by start-live/stop-live endpoints
+        // Syncing live state here causes race conditions with the MJPEG stream
+        if (!realConnected)
+        {
+            sdk.SyncState(false, false);
+        }
     }
 
     return Results.Json(new {
         ok = true,
         connected = realConnected,
-        live = realLive,
+        live = maid?.LiveRunning ?? false,  // Use wrapper state directly
         watch_dir = sdk.WatchDir,
         fps = sdk.Fps,
         nikon_dlls = sdk.DllStatus
@@ -94,14 +93,6 @@ app.MapGet("/status", () => {
 });
 
 app.MapGet("/live.mjpg", async context => {
-    if (!sdk.LiveRunning)
-    {
-        context.Response.StatusCode = StatusCodes.Status409Conflict;
-        await context.Response.WriteAsJsonAsync(new {
-            detail = "Live view not running. Call /sdk/start-live first."
-        });
-        return;
-    }
     if (maid == null)
     {
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
@@ -109,19 +100,43 @@ app.MapGet("/live.mjpg", async context => {
         return;
     }
 
+    // Check wrapper's live state directly (not cached sdk state)
+    if (!maid.LiveRunning)
+    {
+        logger.LogWarning("/live.mjpg: maid.LiveRunning is false, returning 409");
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new {
+            detail = "Live view not running. Call /sdk/start-live first."
+        });
+        return;
+    }
+
+    logger.LogInformation("/live.mjpg: Starting MJPEG stream, maid.LiveRunning={Live}", maid.LiveRunning);
+
     // MJPEG stream - multipart/x-mixed-replace with boundary
     context.Response.ContentType = "multipart/x-mixed-replace; boundary=frame";
     context.Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
     context.Response.Headers.Append("Pragma", "no-cache");
     context.Response.Headers.Append("Expires", "0");
 
+    int frameCount = 0;
+    int emptyFrameCount = 0;
+
     try
     {
-        while (!context.RequestAborted.IsCancellationRequested && sdk.LiveRunning)
+        // Use maid.LiveRunning directly instead of sdk.LiveRunning
+        // This avoids race condition where /status polling can set sdk.LiveRunning=false
+        while (!context.RequestAborted.IsCancellationRequested && maid.LiveRunning)
         {
             var frameBytes = maid.GetLiveFrame();
             if (frameBytes != null && frameBytes.Length > 0)
             {
+                frameCount++;
+                // Log first few frames and then every 100th
+                if (frameCount <= 3 || frameCount % 100 == 0)
+                {
+                    logger.LogInformation("/live.mjpg: Sending frame {Count}, size={Size} bytes", frameCount, frameBytes.Length);
+                }
                 await context.Response.WriteAsync("--frame\r\n");
                 await context.Response.WriteAsync($"Content-Type: image/jpeg\r\n");
                 await context.Response.WriteAsync($"Content-Length: {frameBytes.Length}\r\n\r\n");
@@ -129,10 +144,22 @@ app.MapGet("/live.mjpg", async context => {
                 await context.Response.WriteAsync("\r\n");
                 await context.Response.Body.FlushAsync();
             }
+            else
+            {
+                emptyFrameCount++;
+                // Log first empty frame and every 50th after
+                if (emptyFrameCount == 1 || emptyFrameCount % 50 == 0)
+                {
+                    logger.LogWarning("/live.mjpg: Got {Empty} empty frames so far (sent {Frames} good frames)", emptyFrameCount, frameCount);
+                }
+            }
 
             // Frame rate limiting based on BRIDGE_FPS setting (default 15)
             await Task.Delay(1000 / sdk.Fps, context.RequestAborted);
         }
+
+        logger.LogInformation("/live.mjpg: Loop exited. Sent {Frames} frames, {Empty} empty. maid.LiveRunning={Live}, RequestAborted={Aborted}",
+            frameCount, emptyFrameCount, maid.LiveRunning, context.RequestAborted.IsCancellationRequested);
     }
     catch (Exception ex) when (ex is OperationCanceledException || context.RequestAborted.IsCancellationRequested)
     {

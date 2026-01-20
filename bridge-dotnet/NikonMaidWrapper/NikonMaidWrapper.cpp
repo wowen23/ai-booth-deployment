@@ -118,76 +118,72 @@ bool MaidBridge::Connect()
         auto p3 = Path::Combine(baseDir, "NkRoyalmile.dll");
         auto md3 = Path::Combine(baseDir, "Type0029.md3");
 
-        // Check if DLLs are already loaded (from previous connection)
-        bool dllsAlreadyLoaded = (hMd3Module != IntPtr::Zero && g_pMAIDEntryPoint != nullptr);
+        Console::WriteLine("[MAID] DLL paths resolved");
 
-        if (dllsAlreadyLoaded) {
-            Console::WriteLine("[MAID] DLLs already loaded from previous connection, reusing...");
-        } else {
-            Console::WriteLine("[MAID] DLL paths resolved");
+        auto s1 = msclr::interop::marshal_as<std::wstring>(p1);
+        auto s2 = msclr::interop::marshal_as<std::wstring>(p2);
+        auto s3 = msclr::interop::marshal_as<std::wstring>(p3);
+        auto sMd3 = msclr::interop::marshal_as<std::wstring>(md3);
 
-            auto s1 = msclr::interop::marshal_as<std::wstring>(p1);
-            auto s2 = msclr::interop::marshal_as<std::wstring>(p2);
-            auto s3 = msclr::interop::marshal_as<std::wstring>(p3);
-            auto sMd3 = msclr::interop::marshal_as<std::wstring>(md3);
-
-            Console::WriteLine("[MAID] Loading NkdPTP.dll...");
-            HMODULE h1 = ::LoadLibraryW(s1.c_str());
-            if (!h1) {
-                DWORD err = ::GetLastError();
-                auto w = L"Failed to load NkdPTP.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-                throw gcnew Exception(gcnew System::String(w.c_str()));
-            }
-            Console::WriteLine("[MAID] Loading dnssd.dll...");
-            HMODULE h2 = ::LoadLibraryW(s2.c_str());
-            if (!h2) {
-                DWORD err = ::GetLastError();
-                ::FreeLibrary(h1);
-                auto w = L"Failed to load dnssd.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-                throw gcnew Exception(gcnew System::String(w.c_str()));
-            }
-            Console::WriteLine("[MAID] Loading NkRoyalmile.dll...");
-            HMODULE h3 = ::LoadLibraryW(s3.c_str());
-            if (!h3) {
-                DWORD err = ::GetLastError();
-                ::FreeLibrary(h2); ::FreeLibrary(h1);
-                auto w = L"Failed to load NkRoyalmile.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-                throw gcnew Exception(gcnew System::String(w.c_str()));
-            }
-            this->hNkdPTP = IntPtr(h1);
-            this->hDnssd = IntPtr(h2);
-            this->hNkRoyalmile = IntPtr(h3);
-            Console::WriteLine("[MAID] Support DLLs loaded successfully");
-
-            // Verify MAID module exists (loading via MAID API will follow in next step)
-            Console::WriteLine("[MAID] Checking for Type0029.md3...");
-            if (!File::Exists(md3)) { throw gcnew Exception("Missing Type0029.md3 in bridge output folder"); }
-            md3Path = md3;
-
-            // Load Type0029.md3 and resolve MAID entry point
-            Console::WriteLine("[MAID] Loading Type0029.md3...");
-            HMODULE hMd3 = ::LoadLibraryW(sMd3.c_str());
-            if (!hMd3) {
-                DWORD err = ::GetLastError();
-                auto w = L"Failed to load Type0029.md3 (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-                throw gcnew Exception(gcnew System::String(w.c_str()));
-            }
-            Console::WriteLine("[MAID] Resolving MAIDEntryPoint...");
-            FARPROC p = ::GetProcAddress(hMd3, "MAIDEntryPoint");
-            if (!p) {
-                throw gcnew Exception("MAIDEntryPoint function not found in Type0029.md3. The SDK module file may be corrupted.");
-            }
-
-            g_pMAIDEntryPoint = reinterpret_cast<LPMAIDEntryPointProc>(p);
-            this->hMd3Module = IntPtr(hMd3);
-            this->maidEntry = IntPtr(p);
-
-            // Verify entry point is valid before proceeding
-            if (g_pMAIDEntryPoint == nullptr) {
-                throw gcnew Exception("MAID entry point is null after initialization");
-            }
-            Console::WriteLine("[MAID] MAID entry point resolved successfully");
+        Console::WriteLine("[MAID] Loading NkdPTP.dll...");
+        HMODULE h1 = ::LoadLibraryW(s1.c_str());
+        if (!h1) {
+            DWORD err = ::GetLastError();
+            auto w = L"Failed to load NkdPTP.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+            throw gcnew Exception(gcnew System::String(w.c_str()));
         }
+        Console::WriteLine("[MAID] Loading dnssd.dll...");
+        HMODULE h2 = ::LoadLibraryW(s2.c_str());
+        if (!h2) {
+            DWORD err = ::GetLastError();
+            ::FreeLibrary(h1);
+            auto w = L"Failed to load dnssd.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+            throw gcnew Exception(gcnew System::String(w.c_str()));
+        }
+        Console::WriteLine("[MAID] Loading NkRoyalmile.dll...");
+        HMODULE h3 = ::LoadLibraryW(s3.c_str());
+        if (!h3) {
+            DWORD err = ::GetLastError();
+            ::FreeLibrary(h2); ::FreeLibrary(h1);
+            auto w = L"Failed to load NkRoyalmile.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+            throw gcnew Exception(gcnew System::String(w.c_str()));
+        }
+        this->hNkdPTP = IntPtr(h1);
+        this->hDnssd = IntPtr(h2);
+        this->hNkRoyalmile = IntPtr(h3);
+        Console::WriteLine("[MAID] Support DLLs loaded successfully");
+
+        // Verify MAID module exists (loading via MAID API will follow in next step)
+        Console::WriteLine("[MAID] Checking for Type0029.md3...");
+        if (!File::Exists(md3)) { Disconnect(); throw gcnew Exception("Missing Type0029.md3 in bridge output folder"); }
+        md3Path = md3;
+
+        // Load Type0029.md3 and resolve MAID entry point
+        Console::WriteLine("[MAID] Loading Type0029.md3...");
+        HMODULE hMd3 = ::LoadLibraryW(sMd3.c_str());
+        if (!hMd3) {
+            DWORD err = ::GetLastError();
+            Disconnect();
+            auto w = L"Failed to load Type0029.md3 (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+            throw gcnew Exception(gcnew System::String(w.c_str()));
+        }
+        Console::WriteLine("[MAID] Resolving MAIDEntryPoint...");
+        FARPROC p = ::GetProcAddress(hMd3, "MAIDEntryPoint");
+        if (!p) {
+            Disconnect();
+            throw gcnew Exception("MAIDEntryPoint function not found in Type0029.md3. The SDK module file may be corrupted.");
+        }
+
+        g_pMAIDEntryPoint = reinterpret_cast<LPMAIDEntryPointProc>(p);
+        this->hMd3Module = IntPtr(hMd3);
+        this->maidEntry = IntPtr(p);
+
+        // Verify entry point is valid before proceeding
+        if (g_pMAIDEntryPoint == nullptr) {
+            Disconnect();
+            throw gcnew Exception("MAID entry point is null after initialization");
+        }
+        Console::WriteLine("[MAID] MAID entry point resolved successfully");
 
         // Initialize and open the MAID module
         Console::WriteLine("[MAID] Initializing MAID module...");
@@ -509,10 +505,29 @@ void MaidBridge::Disconnect()
         Console::WriteLine("[MAID] Closed module object");
     }
 
-    // NOTE: Do NOT unload DLLs - the Nikon SDK doesn't handle reload well
-    // Keep DLLs loaded for process lifetime, just close SDK objects
-    // This allows reconnection without restarting the bridge
-    Console::WriteLine("[MAID] Keeping DLLs loaded (SDK doesn't handle reload well)");
+    // Unload DLLs to fully reset SDK state
+    // This is necessary when camera is power cycled - SDK internal handles become invalid
+    Console::WriteLine("[MAID] Unloading DLLs to reset SDK state...");
+    if (hMd3Module != IntPtr::Zero) {
+        ::FreeLibrary(static_cast<HMODULE>(hMd3Module.ToPointer()));
+        hMd3Module = IntPtr::Zero;
+    }
+    g_pMAIDEntryPoint = nullptr;
+    if (hNkRoyalmile != IntPtr::Zero) {
+        ::FreeLibrary(static_cast<HMODULE>(hNkRoyalmile.ToPointer()));
+        hNkRoyalmile = IntPtr::Zero;
+    }
+    if (hDnssd != IntPtr::Zero) {
+        ::FreeLibrary(static_cast<HMODULE>(hDnssd.ToPointer()));
+        hDnssd = IntPtr::Zero;
+    }
+    if (hNkdPTP != IntPtr::Zero) {
+        ::FreeLibrary(static_cast<HMODULE>(hNkdPTP.ToPointer()));
+        hNkdPTP = IntPtr::Zero;
+    }
+
+    // Small delay to let Windows fully release USB handles
+    Sleep(500);
 
     connected = false;
     liveRunning = false;
