@@ -118,72 +118,76 @@ bool MaidBridge::Connect()
         auto p3 = Path::Combine(baseDir, "NkRoyalmile.dll");
         auto md3 = Path::Combine(baseDir, "Type0029.md3");
 
-        Console::WriteLine("[MAID] DLL paths resolved");
+        // Check if DLLs are already loaded (from previous connection)
+        bool dllsAlreadyLoaded = (hMd3Module != IntPtr::Zero && g_pMAIDEntryPoint != nullptr);
 
-        auto s1 = msclr::interop::marshal_as<std::wstring>(p1);
-        auto s2 = msclr::interop::marshal_as<std::wstring>(p2);
-        auto s3 = msclr::interop::marshal_as<std::wstring>(p3);
-        auto sMd3 = msclr::interop::marshal_as<std::wstring>(md3);
+        if (dllsAlreadyLoaded) {
+            Console::WriteLine("[MAID] DLLs already loaded from previous connection, reusing...");
+        } else {
+            Console::WriteLine("[MAID] DLL paths resolved");
 
-        Console::WriteLine("[MAID] Loading NkdPTP.dll...");
-        HMODULE h1 = ::LoadLibraryW(s1.c_str());
-        if (!h1) {
-            DWORD err = ::GetLastError();
-            auto w = L"Failed to load NkdPTP.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-            throw gcnew Exception(gcnew System::String(w.c_str()));
-        }
-        Console::WriteLine("[MAID] Loading dnssd.dll...");
-        HMODULE h2 = ::LoadLibraryW(s2.c_str());
-        if (!h2) {
-            DWORD err = ::GetLastError();
-            ::FreeLibrary(h1);
-            auto w = L"Failed to load dnssd.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-            throw gcnew Exception(gcnew System::String(w.c_str()));
-        }
-        Console::WriteLine("[MAID] Loading NkRoyalmile.dll...");
-        HMODULE h3 = ::LoadLibraryW(s3.c_str());
-        if (!h3) {
-            DWORD err = ::GetLastError();
-            ::FreeLibrary(h2); ::FreeLibrary(h1);
-            auto w = L"Failed to load NkRoyalmile.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-            throw gcnew Exception(gcnew System::String(w.c_str()));
-        }
-        this->hNkdPTP = IntPtr(h1);
-        this->hDnssd = IntPtr(h2);
-        this->hNkRoyalmile = IntPtr(h3);
-        Console::WriteLine("[MAID] Support DLLs loaded successfully");
+            auto s1 = msclr::interop::marshal_as<std::wstring>(p1);
+            auto s2 = msclr::interop::marshal_as<std::wstring>(p2);
+            auto s3 = msclr::interop::marshal_as<std::wstring>(p3);
+            auto sMd3 = msclr::interop::marshal_as<std::wstring>(md3);
 
-        // Verify MAID module exists (loading via MAID API will follow in next step)
-        Console::WriteLine("[MAID] Checking for Type0029.md3...");
-        if (!File::Exists(md3)) { Disconnect(); throw gcnew Exception("Missing Type0029.md3 in bridge output folder"); }
-        md3Path = md3;
+            Console::WriteLine("[MAID] Loading NkdPTP.dll...");
+            HMODULE h1 = ::LoadLibraryW(s1.c_str());
+            if (!h1) {
+                DWORD err = ::GetLastError();
+                auto w = L"Failed to load NkdPTP.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+                throw gcnew Exception(gcnew System::String(w.c_str()));
+            }
+            Console::WriteLine("[MAID] Loading dnssd.dll...");
+            HMODULE h2 = ::LoadLibraryW(s2.c_str());
+            if (!h2) {
+                DWORD err = ::GetLastError();
+                ::FreeLibrary(h1);
+                auto w = L"Failed to load dnssd.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+                throw gcnew Exception(gcnew System::String(w.c_str()));
+            }
+            Console::WriteLine("[MAID] Loading NkRoyalmile.dll...");
+            HMODULE h3 = ::LoadLibraryW(s3.c_str());
+            if (!h3) {
+                DWORD err = ::GetLastError();
+                ::FreeLibrary(h2); ::FreeLibrary(h1);
+                auto w = L"Failed to load NkRoyalmile.dll (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+                throw gcnew Exception(gcnew System::String(w.c_str()));
+            }
+            this->hNkdPTP = IntPtr(h1);
+            this->hDnssd = IntPtr(h2);
+            this->hNkRoyalmile = IntPtr(h3);
+            Console::WriteLine("[MAID] Support DLLs loaded successfully");
 
-        // Load Type0029.md3 and resolve MAID entry point
-        Console::WriteLine("[MAID] Loading Type0029.md3...");
-        HMODULE hMd3 = ::LoadLibraryW(sMd3.c_str());
-        if (!hMd3) {
-            DWORD err = ::GetLastError();
-            Disconnect();
-            auto w = L"Failed to load Type0029.md3 (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
-            throw gcnew Exception(gcnew System::String(w.c_str()));
-        }
-        Console::WriteLine("[MAID] Resolving MAIDEntryPoint...");
-        FARPROC p = ::GetProcAddress(hMd3, "MAIDEntryPoint");
-        if (!p) {
-            Disconnect();
-            throw gcnew Exception("MAIDEntryPoint function not found in Type0029.md3. The SDK module file may be corrupted.");
-        }
+            // Verify MAID module exists (loading via MAID API will follow in next step)
+            Console::WriteLine("[MAID] Checking for Type0029.md3...");
+            if (!File::Exists(md3)) { throw gcnew Exception("Missing Type0029.md3 in bridge output folder"); }
+            md3Path = md3;
 
-        g_pMAIDEntryPoint = reinterpret_cast<LPMAIDEntryPointProc>(p);
-        this->hMd3Module = IntPtr(hMd3);
-        this->maidEntry = IntPtr(p);
+            // Load Type0029.md3 and resolve MAID entry point
+            Console::WriteLine("[MAID] Loading Type0029.md3...");
+            HMODULE hMd3 = ::LoadLibraryW(sMd3.c_str());
+            if (!hMd3) {
+                DWORD err = ::GetLastError();
+                auto w = L"Failed to load Type0029.md3 (" + std::to_wstring(err) + L"): " + FormatWin32Error(err);
+                throw gcnew Exception(gcnew System::String(w.c_str()));
+            }
+            Console::WriteLine("[MAID] Resolving MAIDEntryPoint...");
+            FARPROC p = ::GetProcAddress(hMd3, "MAIDEntryPoint");
+            if (!p) {
+                throw gcnew Exception("MAIDEntryPoint function not found in Type0029.md3. The SDK module file may be corrupted.");
+            }
 
-        // Verify entry point is valid before proceeding
-        if (g_pMAIDEntryPoint == nullptr) {
-            Disconnect();
-            throw gcnew Exception("MAID entry point is null after initialization");
+            g_pMAIDEntryPoint = reinterpret_cast<LPMAIDEntryPointProc>(p);
+            this->hMd3Module = IntPtr(hMd3);
+            this->maidEntry = IntPtr(p);
+
+            // Verify entry point is valid before proceeding
+            if (g_pMAIDEntryPoint == nullptr) {
+                throw gcnew Exception("MAID entry point is null after initialization");
+            }
+            Console::WriteLine("[MAID] MAID entry point resolved successfully");
         }
-        Console::WriteLine("[MAID] MAID entry point resolved successfully");
 
         // Initialize and open the MAID module
         Console::WriteLine("[MAID] Initializing MAID module...");
@@ -476,12 +480,15 @@ bool MaidBridge::EnumerateAndOpenItem()
 
 void MaidBridge::Disconnect()
 {
+    Console::WriteLine("[MAID] Disconnect() called");
+
     // Close item object
     if (pItemObj != IntPtr::Zero) {
         NkMAIDObject* pItem = static_cast<NkMAIDObject*>(pItemObj.ToPointer());
         CallMAID(pItem, kNkMAIDCommand_Close, 0, 0, NULL);
         delete pItem;
         pItemObj = IntPtr::Zero;
+        Console::WriteLine("[MAID] Closed item object");
     }
 
     // Close source object
@@ -490,6 +497,7 @@ void MaidBridge::Disconnect()
         CallMAID(pSrc, kNkMAIDCommand_Close, 0, 0, NULL);
         delete pSrc;
         pSourceObj = IntPtr::Zero;
+        Console::WriteLine("[MAID] Closed source object");
     }
 
     // Close module object
@@ -498,16 +506,17 @@ void MaidBridge::Disconnect()
         CallMAID(pMod, kNkMAIDCommand_Close, 0, 0, NULL);
         delete pMod;
         pModuleObj = IntPtr::Zero;
+        Console::WriteLine("[MAID] Closed module object");
     }
 
-    // Unload DLLs
-    if (hMd3Module != IntPtr::Zero) { ::FreeLibrary(static_cast<HMODULE>(hMd3Module.ToPointer())); hMd3Module = IntPtr::Zero; }
-    g_pMAIDEntryPoint = nullptr;
-    if (hNkRoyalmile != IntPtr::Zero) { ::FreeLibrary(static_cast<HMODULE>(hNkRoyalmile.ToPointer())); hNkRoyalmile = IntPtr::Zero; }
-    if (hDnssd      != IntPtr::Zero) { ::FreeLibrary(static_cast<HMODULE>(hDnssd.ToPointer()));      hDnssd = IntPtr::Zero; }
-    if (hNkdPTP     != IntPtr::Zero) { ::FreeLibrary(static_cast<HMODULE>(hNkdPTP.ToPointer()));     hNkdPTP = IntPtr::Zero; }
+    // NOTE: Do NOT unload DLLs - the Nikon SDK doesn't handle reload well
+    // Keep DLLs loaded for process lifetime, just close SDK objects
+    // This allows reconnection without restarting the bridge
+    Console::WriteLine("[MAID] Keeping DLLs loaded (SDK doesn't handle reload well)");
+
     connected = false;
     liveRunning = false;
+    Console::WriteLine("[MAID] Disconnect() complete");
 }
 
 // Real-time check if camera is actually connected and responding
@@ -715,21 +724,26 @@ bool MaidBridge::StartLive()
         Console::WriteLine(String::Format("[MAID] Could not read LiveViewStatus: error {0}", result));
     }
 
-    // Always try to set LiveViewStatus to 3 (Remote Live View)
-    // Even if we couldn't read the current status, the SET command should work
-    // IMPORTANT: For Unsigned type, pass the VALUE directly as NKPARAM (not a pointer) - see sample code
-    if (currentStatus != 3) {
-        Console::WriteLine("[MAID] Attempting to set LiveViewStatus to 3 (Remote Live View)...");
-        ULONG status = 3;  // kNkMAIDLiveViewStatus_ON_RemoteLV
-        result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
-                          kNkMAIDDataType_Unsigned, (void*)(NKPARAM)status);  // Pass value as NKPARAM
-        Console::WriteLine(String::Format("[MAID] LiveViewStatus Set(3): result={0}", result));
+    // ALWAYS force a clean live view start by stopping first, then starting
+    // This handles stale state after camera disconnect/reconnect
+    Console::WriteLine("[MAID] Forcing clean live view start: setting LiveViewStatus to 0 (OFF) first...");
+    ULONG stopStatus = 0;
+    result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
+                      kNkMAIDDataType_Unsigned, (void*)(NKPARAM)stopStatus);
+    Console::WriteLine(String::Format("[MAID] LiveViewStatus Set(0): result={0}", result));
 
-        if (result != kNkMAIDResult_NoError) {
-            Console::WriteLine(String::Format("[MAID] Warning: Could not set LiveViewStatus: error {0}", result));
-        }
-    } else {
-        Console::WriteLine("[MAID] LiveViewStatus is already 3 (Remote Live View)!");
+    // Small delay to let camera process the stop
+    Sleep(100);
+
+    // Now set to Remote Live View mode
+    Console::WriteLine("[MAID] Setting LiveViewStatus to 3 (Remote Live View)...");
+    ULONG startStatus = 3;  // kNkMAIDLiveViewStatus_ON_RemoteLV
+    result = CallMAID(pSource, kNkMAIDCommand_CapSet, kNkMAIDCapability_LiveViewStatus,
+                      kNkMAIDDataType_Unsigned, (void*)(NKPARAM)startStatus);
+    Console::WriteLine(String::Format("[MAID] LiveViewStatus Set(3): result={0}", result));
+
+    if (result != kNkMAIDResult_NoError) {
+        Console::WriteLine(String::Format("[MAID] Warning: Could not set LiveViewStatus: error {0}", result));
     }
 
     // Try to get a live view frame
@@ -793,7 +807,21 @@ void MaidBridge::StopLive()
 
 array<System::Byte>^ MaidBridge::GetLiveFrame()
 {
-    if (!liveRunning || pSourceObj == IntPtr::Zero || g_pMAIDEntryPoint == nullptr) {
+    // Log why we might return empty
+    if (!liveRunning) {
+        // Only log occasionally to avoid spam
+        static int skipCount = 0;
+        if (skipCount++ % 100 == 0) {
+            Console::WriteLine("[MAID] GetLiveFrame: liveRunning is false");
+        }
+        return gcnew array<System::Byte>(0);
+    }
+    if (pSourceObj == IntPtr::Zero) {
+        Console::WriteLine("[MAID] GetLiveFrame: pSourceObj is null");
+        return gcnew array<System::Byte>(0);
+    }
+    if (g_pMAIDEntryPoint == nullptr) {
+        Console::WriteLine("[MAID] GetLiveFrame: g_pMAIDEntryPoint is null");
         return gcnew array<System::Byte>(0);
     }
 
@@ -817,6 +845,11 @@ array<System::Byte>^ MaidBridge::GetLiveFrame()
     IdleLoop(pSource, &ulCount, 1);
 
     if (result != kNkMAIDResult_NoError || stArray.ulElements == 0) {
+        // Log occasionally to avoid spam
+        static int failCount = 0;
+        if (failCount++ % 50 == 0) {
+            Console::WriteLine(String::Format("[MAID] GetLiveFrame: CapGet failed, result={0}, elements={1}", result, stArray.ulElements));
+        }
         return gcnew array<System::Byte>(0);
     }
 
