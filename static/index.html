@@ -777,6 +777,12 @@
       isCountingDown = true;
       const originalText = btnBoothShoot.textContent;
 
+      // Stop live view before capture (prevents state confusion)
+      statusEl.textContent = 'Preparing camera...';
+      bridgeLiveEl.src = '';  // Clear stream display
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
+
       // Countdown from 3 to 1
       for (let i = 3; i >= 1; i--) {
         btnBoothShoot.textContent = i.toString();
@@ -1794,25 +1800,25 @@
       // Don't auto-start live view - user controls via buttons
     }
 
-    // Start live view and open stream (used after taking another photo)
+    // Reconnect camera after taking a photo (used by "Take Another" button)
+    // Only does connect - user must manually click "Start Live" then "Open Stream"
     async function startKioskLiveView() {
       const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
 
       try {
-        showKioskStatus('Restarting live view...');
+        showKioskStatus('Reconnecting camera...');
 
-        // Start live view (assumes already connected)
-        const liveResp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
-        if (!liveResp.ok) throw new Error('Start live failed');
+        // Just reconnect - don't auto-start live view (prevents overwhelming camera)
+        const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!connectResp.ok) throw new Error('Connect failed');
 
-        // Show live stream
-        kioskPlaceholder.style.display = 'none';
-        kioskResultImg.style.display = 'none';
-        kioskLiveStream.src = bridge + '/live.mjpg?ts=' + Date.now();
-        kioskLiveStream.style.display = 'block';
-        kioskLiveViewActive = true;
+        // Reset UI state
+        kioskLiveStream.src = '';
+        kioskLiveStream.style.display = 'none';
+        kioskPlaceholder.style.display = 'block';
+        kioskLiveViewActive = false;
 
-        showKioskStatus('Ready! Tap "Take Photo" when ready.', 3000);
+        showKioskStatus('Camera connected! Click "Start Live" then "Open Stream".', 5000);
       } catch (e) {
         showKioskStatus('Camera error: ' + e.message, 5000);
       }
@@ -1858,6 +1864,12 @@
           const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
           if (!connectResp.ok) throw new Error('Camera connect failed');
         }
+
+        // Stop live view before capture (prevents state confusion)
+        showKioskStatus('Preparing camera...');
+        kioskLiveStream.src = '';  // Clear stream display
+        await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
+        kioskLiveViewActive = false;
 
         // Countdown
         for (let i = 3; i >= 1; i--) {
