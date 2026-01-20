@@ -351,14 +351,14 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="user">User</button>
-    <button class="tab" data-tab="kiosk">Kiosk</button>
+    <!-- User tab disabled - not needed for deployment -->
+    <button class="tab active" data-tab="kiosk">Kiosk</button>
     <button class="tab" data-tab="booth">Dev</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
 
-  <!-- User Tab (Simplified) -->
-  <div id="user" class="tab-content active">
+  <!-- User Tab (Disabled - hidden) -->
+  <div id="user" class="tab-content" style="display:none !important;">
     <h1 style="text-align:center; color:#667eea; margin-bottom:20px;">AI Photo Booth</h1>
 
     <!-- Live View Display -->
@@ -416,13 +416,16 @@
   </div>
 
   <!-- Kiosk Tab (Touch-optimized for 4K touchscreen) -->
-  <div id="kiosk" class="tab-content">
+  <div id="kiosk" class="tab-content active">
     <div class="kiosk-container">
       <div class="kiosk-header">
         <h1 class="kiosk-title">AI Photo Booth</h1>
         <div style="display:flex; gap:15px;">
-          <button id="kioskStartLiveBtn" class="kiosk-fullscreen-btn">Start Live View</button>
-          <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Enter Fullscreen</button>
+          <button id="kioskConnectBtn" class="kiosk-fullscreen-btn">Connect</button>
+          <button id="kioskStartLiveBtn" class="kiosk-fullscreen-btn">Start Live</button>
+          <button id="kioskOpenStreamBtn" class="kiosk-fullscreen-btn">Open Stream</button>
+          <button id="kioskStopLiveBtn" class="kiosk-fullscreen-btn">Stop</button>
+          <button id="kioskFullscreenBtn" class="kiosk-fullscreen-btn">Fullscreen</button>
         </div>
       </div>
 
@@ -1629,24 +1632,56 @@
       }
     });
 
-    // Start Live View button handler
-    kioskStartLiveBtn.addEventListener('click', async () => {
-      if (kioskLiveViewActive) {
-        // Stop live view
-        await stopKioskLiveView();
-        kioskStartLiveBtn.textContent = 'Start Live View';
-        kioskPlaceholder.style.display = 'block';
-        kioskLiveStream.style.display = 'none';
-      } else {
-        // Start live view
-        kioskStartLiveBtn.textContent = 'Connecting...';
-        await startKioskLiveView();
-        if (kioskLiveViewActive) {
-          kioskStartLiveBtn.textContent = 'Stop Live View';
-        } else {
-          kioskStartLiveBtn.textContent = 'Start Live View';
-        }
+    // Kiosk camera control buttons (separate like dev tab)
+    const kioskConnectBtn = document.getElementById('kioskConnectBtn');
+    const kioskOpenStreamBtn = document.getElementById('kioskOpenStreamBtn');
+    const kioskStopLiveBtn = document.getElementById('kioskStopLiveBtn');
+
+    kioskConnectBtn.addEventListener('click', async () => {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      try {
+        showKioskStatus('Connecting camera...');
+        const resp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
+        if (!resp.ok) throw new Error('Connect failed');
+        showKioskStatus('Camera connected!', 3000);
+      } catch (e) {
+        showKioskStatus('Connect error: ' + e.message, 5000);
       }
+    });
+
+    kioskStartLiveBtn.addEventListener('click', async () => {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      try {
+        showKioskStatus('Starting live view...');
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+        showKioskStatus('Live view started! Click "Open Stream" to view.', 3000);
+      } catch (e) {
+        showKioskStatus('Start live error: ' + e.message, 5000);
+      }
+    });
+
+    kioskOpenStreamBtn.addEventListener('click', async () => {
+      const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
+      try {
+        showKioskStatus('Opening stream...');
+        // Just open the stream (don't call start-live again)
+        kioskPlaceholder.style.display = 'none';
+        kioskResultImg.style.display = 'none';
+        kioskLiveStream.src = bridge + '/live.mjpg?ts=' + Date.now();
+        kioskLiveStream.style.display = 'block';
+        kioskLiveViewActive = true;
+        showKioskStatus('Stream opened!', 2000);
+      } catch (e) {
+        showKioskStatus('Open stream error: ' + e.message, 5000);
+      }
+    });
+
+    kioskStopLiveBtn.addEventListener('click', async () => {
+      await stopKioskLiveView();
+      kioskPlaceholder.style.display = 'block';
+      kioskLiveStream.style.display = 'none';
+      showKioskStatus('Live view stopped', 2000);
     });
 
     // Show status message
@@ -1715,24 +1750,17 @@
       btn.classList.add('selected');
       kioskSelectedStyle = stylePath;
 
-      // Start live view if not already active
-      if (!kioskLiveViewActive && !kioskIsProcessing) {
-        startKioskLiveView();
-      }
+      // Don't auto-start live view - user controls via buttons
     }
 
-    // Start live view
+    // Start live view and open stream (used after taking another photo)
     async function startKioskLiveView() {
       const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
 
       try {
-        showKioskStatus('Connecting camera...');
+        showKioskStatus('Restarting live view...');
 
-        // Connect camera
-        const connectResp = await fetch(bridge + '/sdk/connect', { method: 'POST' });
-        if (!connectResp.ok) throw new Error('Connect failed');
-
-        // Start live view
+        // Start live view (assumes already connected)
         const liveResp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
         if (!liveResp.ok) throw new Error('Start live failed');
 
