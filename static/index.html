@@ -777,11 +777,7 @@
       isCountingDown = true;
       const originalText = btnBoothShoot.textContent;
 
-      // Stop live view before capture (prevents state confusion)
-      statusEl.textContent = 'Preparing camera...';
-      bridgeLiveEl.src = '';  // Clear stream display
       const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
-      await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
 
       // Countdown from 3 to 1
       for (let i = 3; i >= 1; i--) {
@@ -789,6 +785,11 @@
         statusEl.textContent = `Get ready... ${i}`;
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
+
+      // Stop live view after countdown (before capture)
+      statusEl.textContent = 'Preparing camera...';
+      bridgeLiveEl.src = '';  // Clear stream display
+      await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
 
       btnBoothShoot.textContent = 'CAPTURING...';
       statusEl.textContent = 'Capturing photo...';
@@ -1695,7 +1696,12 @@
       const bridge = (bridgeUrlEl.value || 'http://localhost:9001').replace(/\/$/, '');
       try {
         showKioskStatus('Opening stream...');
-        // Just open the stream (don't call start-live again)
+
+        // Start live view first (same as dev page)
+        const resp = await fetch(bridge + '/sdk/start-live', { method: 'POST' });
+        if (!resp.ok) throw new Error('Start live failed');
+
+        // Then open the stream
         kioskPlaceholder.style.display = 'none';
         kioskResultImg.style.display = 'none';
         kioskLiveStream.src = bridge + '/live.mjpg?ts=' + Date.now();
@@ -1865,17 +1871,17 @@
           if (!connectResp.ok) throw new Error('Camera connect failed');
         }
 
-        // Stop live view before capture (prevents state confusion)
-        showKioskStatus('Preparing camera...');
-        kioskLiveStream.src = '';  // Clear stream display
-        await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
-        kioskLiveViewActive = false;
-
         // Countdown
         for (let i = 3; i >= 1; i--) {
           await showCountdown(i);
         }
         kioskCountdown.style.display = 'none';
+
+        // Stop live view after countdown (before capture)
+        showKioskStatus('Preparing camera...');
+        kioskLiveStream.src = '';  // Clear stream display
+        await fetch(bridge + '/sdk/stop-live', { method: 'POST' }).catch(() => {});
+        kioskLiveViewActive = false;
 
         // Capture
         showKioskStatus('Capturing...');
